@@ -4,6 +4,8 @@ export default function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMatch, setPasswordMatch] = useState(true);
   const emailRef = useRef(null);
 
   useEffect(() => {
@@ -13,8 +15,16 @@ export default function RegisterForm() {
     }
   }, []);
 
+  useEffect(() => {
+    setPasswordMatch(password === confirmPassword || confirmPassword === "");
+  }, [password, confirmPassword]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
     console.log("Registration Attempted", { name, email, password });
   };
 
@@ -30,7 +40,7 @@ export default function RegisterForm() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 bg-transparent text-white placeholder-gray-300"
-              placeholder="Enter username"
+              placeholder="Enter your name"
             />
           </div>
           <div>
@@ -54,10 +64,24 @@ export default function RegisterForm() {
               placeholder="Enter your password"
             />
           </div>
+          <div>
+            <label className="block">Confirm Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 bg-transparent text-white placeholder-gray-300 ${passwordMatch ? "focus:ring-orange-500" : "focus:ring-red-500 border-red-500"}`}
+              placeholder="Confirm your password"
+            />
+            {!passwordMatch && <p className="text-red-400 text-sm mt-1">Passwords do not match</p>}
+          </div>
           <button type="submit" className="w-full bg-orange-700 hover:bg-orange-800 text-white py-2 rounded-lg">
             Register
           </button>
         </form>
+        <p className="text-center mt-4">
+          Already registered? <a href="/login" className="text-orange-300 hover:underline">Login here</a>
+        </p>
       </div>
     </div>
   );
