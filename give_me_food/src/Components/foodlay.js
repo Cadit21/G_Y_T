@@ -1,15 +1,34 @@
 import React, { useContext, useState, useEffect } from "react";
 import { CartContext } from "../context/cartContext";
-import data from "../Data/Food.js";
 import img from "../images/front.png";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 function Foodlay() {
   const { addToCart } = useContext(CartContext);
+  const [foodItems, setFoodItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
   const [filter, setFilter] = useState("All");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchFoodItems();
+  }, []);
+
+  const fetchFoodItems = async () => {
+    try {
+        const response = await fetch("http://localhost:5000/api/food");
+        const data = await response.json();
+        console.log("Fetched Data:", data); // Debugging
+        setFoodItems(Array.isArray(data) ? data : []); // Ensure it's always an array
+    } catch (error) {
+        console.error("Error fetching food items:", error);
+        setFoodItems([]); // Set empty array in case of error
+    }
+};
+
 
   const handleFilterChange = (category) => {
     setFilter(category);
@@ -24,6 +43,13 @@ function Foodlay() {
   }, []);
 
   const handleAddToCart = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please log in to add items to the cart.");
+      navigate("/login");
+      return;
+    }
+
     addToCart(selectedItem, quantity);
     setAddedToCart(true);
     setTimeout(() => {
@@ -33,7 +59,11 @@ function Foodlay() {
   };
 
   const filteredData =
-    filter === "All" ? data : data.filter((item) => item.category === filter);
+  filter === "All"
+    ? foodItems
+    : foodItems.filter((item) =>
+        ["veg", "non-veg"].includes(filter) ? item.type === filter : item.category === filter
+      );
 
   return (
     <div className="p-6">
@@ -41,26 +71,25 @@ function Foodlay() {
       <h1 className="text-3xl font-bold mb-4 text-center"></h1>
 
       {/* Filter Options */}
-      {/* Filter Options */}
-<div className="flex flex-wrap justify-center gap-2 mb-6 px-2">
-  {["All", "Veg", "Non-Veg", "Snacks", "Lunch/Dinner"].map((category) => (
-    <span
-      key={category}
-      onClick={() => handleFilterChange(category)}
-      className={`px-4 py-1 rounded-full cursor-pointer text-xs sm:text-sm md:text-base transition ${
-        filter === category ? "bg-gray-400 text-white" : "bg-gray-200 text-gray-700"
-      }`}
-    >
-      {category}
-    </span>
-  ))}
-</div>
+      <div className="flex flex-wrap justify-center gap-2 mb-6 px-2">
+        {["All", "veg", "non-veg", "Snack", "Lunch", "Combo"].map((category) => (
+          <span
+            key={category}
+            onClick={() => handleFilterChange(category)}
+            className={`px-4 py-1 rounded-full cursor-pointer text-xs sm:text-sm md:text-base transition ${
+              filter === category ? "bg-gray-400 text-white" : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            {category}
+          </span>
+        ))}
+      </div>
 
       {/* Food Items */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredData.map((item) => (
           <div
-            key={item.name}
+            key={item._id}
             className="bg-white p-4 shadow-lg rounded-2xl flex flex-col items-center transform transition duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer"
             onClick={() => {
               setSelectedItem(item);
@@ -98,7 +127,7 @@ function Foodlay() {
               />
               <h2 className="text-2xl font-bold mt-4 text-center">{selectedItem.name}</h2>
               <p className="text-gray-600 text-center text-lg">₹{selectedItem.price}</p>
-              <p className="text-gray-500 text-sm text-center mt-2">{selectedItem.description || "Delicious food for you!"}</p>
+              <p className="text-gray-500 text-sm text-center mt-2">{selectedItem.description}</p>
 
               {/* Quantity Selector */}
               <div className="mt-4 flex justify-center items-center space-x-4">

@@ -14,7 +14,7 @@ const dummyFoodItems = [
             category: "Snack",
             price: 149,
             description: "A delicious veggie patty with fresh lettuce, tomatoes, and cheese in a soft bun.",
-            image: "https://upload.wikimedia.org/wikipedia/commons/6/60/Veggie_Burger_%281%29.jpg",
+            image: "https://res.cloudinary.com/dzp9qqhwk/image/upload/v1740325655/veg_burger_ybmiix.png",
             timestamp: new Date()
         },
         {

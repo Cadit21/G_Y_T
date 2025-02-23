@@ -7,9 +7,11 @@ const dotenv = require('dotenv');
 const Food = require('./models/foodModel');
 const User = require('./models/UserModel');
 const Order = require('./models/OrderModel');
-
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
 
 const cors = require('cors');
+
 
 dotenv.config();
 const app = express();
@@ -21,10 +23,22 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Middleware
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// Middleware
+app.get("/api/food", async (req, res) => {
+  try {
+      if (!mongoose.connection.readyState) {
+          return res.status(500).json({ message: "Database not connected" });
+      }
+      const foodItems = await Food.find();
+      res.json(foodItems);
+  } catch (error) {
+      console.error("Error fetching food items:", error);
+      res.status(500).json({ message: "Server Error" });
+  }
+});
 
 
 // Routes
@@ -32,11 +46,7 @@ app.get('/', (req, res) => {
   res.send('Welcome to Food For Me API');
 });
 
-// Get all food items
-app.get('/api/food', async (req, res) => {
-  const food = await Food.find();
-  res.json(food);
-});
+
 
 // Get food item by ID
 app.get('/api/food/:id', async (req, res) => {
@@ -62,23 +72,73 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+app.put('/api/cart', async (req, res) => {
+  const { userId, cart } = req.body;
+
+  console.log("Received userId:", userId);
+  console.log("Received cart data:", cart);
+
+  if (!userId) {
+    return res.status(400).json({ message: "User ID is required" });
+  }
+
+  if (!Array.isArray(cart)) {
+    return res.status(400).json({ message: "Invalid cart data" });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User not found in database!");
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.cart = cart;
+    await user.save();
+
+    console.log("Updated user cart:", user.cart);
+    res.json({ message: "Cart updated successfully", cart: user.cart });
+  } catch (error) {
+    console.error("Error updating cart:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 // User Login
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-    
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+    res.json({
+      token,
+      user: {   // ✅ Ensure this object is sent
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        cart: user.cart || [],
+      },
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    console.error("Login Error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
+
+
+// Create a Razorpay Order
+
+
 
 // Start Server
 const PORT = process.env.PORT || 5000;

@@ -7,13 +7,11 @@ const foodSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: true
     },
     type: {
         type: String,
         required: true
     },
-
     price: {
         type: Number,
         required: true
@@ -33,5 +31,6 @@ const foodSchema = new mongoose.Schema({
 });
 
 const Food = mongoose.model('itemDetails', foodSchema);
+
 
 module.exports = Food;

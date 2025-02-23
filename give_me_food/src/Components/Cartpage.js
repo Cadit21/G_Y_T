@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 function CartPage() {
   const { cart } = useContext(CartContext);
 
+  const totalAmount = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
   return (
     <div className="p-6">
       <h1 className="text-3xl font-bold text-center">Your Cart</h1>
@@ -12,7 +14,10 @@ function CartPage() {
       {cart.length === 0 ? (
         <div className="text-center mt-4">
           <p className="text-gray-500">Your cart is empty.</p>
-          <Link to="/" className="mt-4 inline-block px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition">
+          <Link
+            to="/"
+            className="mt-4 inline-block px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition"
+          >
             Go to Menu
           </Link>
         </div>
@@ -31,8 +36,16 @@ function CartPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 text-right font-semibold text-xl">
-            Total: ₹{cart.reduce((acc, item) => acc + item.price * item.quantity, 0)}
+          <div className="mt-4 text-right font-semibold text-xl">Total: ₹{totalAmount}</div>
+          
+          {/* Proceed to Pay Button */}
+          <div className="mt-6 flex justify-center">
+            <button
+              className="bg-green-500 text-white px-6 py-3 rounded-lg shadow hover:bg-green-600 transition"
+              onClick={() => alert("Proceeding to payment...")}
+            >
+              Proceed to Pay
+            </button>
           </div>
         </div>
       )}

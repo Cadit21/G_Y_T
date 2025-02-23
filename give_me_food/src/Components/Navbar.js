@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { CartContext } from "../context/cartContext"; // Import Cart Context
 import logo from "../images/logo.png";
 import img from "../images/tray.jpg";
+import axios from 'axios';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

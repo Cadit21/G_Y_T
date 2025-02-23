@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { FiMail, FiLock } from "react-icons/fi";
+import LoadingScreen from "./LoadingScreen";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -9,27 +10,33 @@ const Login = () => {
   const [message, setMessage] = useState(null); // State for message
   const [messageType, setMessageType] = useState(""); // "success" or "error"
   const navigate = useNavigate();
-
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const res = await axios.post("http://localhost:5000/api/login", { email, password });
-
-      // Store token in localStorage
+  
+      // Store token and user data in localStorage
       localStorage.setItem("token", res.data.token);
-
+      localStorage.setItem("user", JSON.stringify(res.data.user)); // 🔥 Store user details
+  
+      console.log("User stored in localStorage:", res.data.user); // Debugging
+  
       // Show success message
       setMessage("Login successful! Redirecting...");
       setMessageType("success");
-
-      // Redirect to home screen after 2 seconds
-      setTimeout(() => navigate("/"), 2000);
+  
+      setTimeout(() => {
+        setLoading(false);
+        navigate("/");
+      }, 2000);
       
     } catch (error) {
       setMessage(error.response?.data?.message || "Login failed");
       setMessageType("error");
     }
   };
+  
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-orange-200 to-orange-300 px-4">
