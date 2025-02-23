@@ -6,6 +6,10 @@ import CartPage from "./Components/Cartpage";
 import img from "./images/front.png";
 import { CartProvider } from "./context/cartContext";
 import ChatWidget from "./Components/Chatwidget";
+import { LogIn } from "lucide-react";
+import Login from "./Components/Login";
+import Register from "./Components/Register";
+import LoginForm from "./Components/LoginForm";
 
 function App() {
   return (
@@ -16,6 +20,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Foodlay />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/login" element={<LoginForm/>} />
+          <Route path="/register" element={<Register />} />
         </Routes>
 
         <ChatWidget/>
