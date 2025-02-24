@@ -2,15 +2,19 @@ import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import LoadingScreen from "./LoadingScreen"; // Import LoadingScreen
+import { useContext } from "react";
+import { CartContext } from "../context/cartContext";
+
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("");
-  const [loading, setLoading] = useState(false); // 🔥 Added loading state
+  const [loading, setLoading] = useState(false); 
 
   const emailRef = useRef(null);
+  const { setCart } = useContext(CartContext); 
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -19,16 +19,15 @@ function Foodlay() {
 
   const fetchFoodItems = async () => {
     try {
-        const response = await fetch("http://localhost:5000/api/food");
-        const data = await response.json();
-        console.log("Fetched Data:", data); // Debugging
-        setFoodItems(Array.isArray(data) ? data : []); // Ensure it's always an array
+      const response = await fetch("http://localhost:5000/api/food");
+      const data = await response.json();
+      console.log("Fetched Data:", data);
+      setFoodItems(Array.isArray(data) ? data : []);
     } catch (error) {
-        console.error("Error fetching food items:", error);
-        setFoodItems([]); // Set empty array in case of error
+      console.error("Error fetching food items:", error);
+      setFoodItems([]);
     }
-};
-
+  };
 
   const handleFilterChange = (category) => {
     setFilter(category);
@@ -58,12 +57,14 @@ function Foodlay() {
     }, 1500);
   };
 
-  const filteredData =
-  filter === "All"
-    ? foodItems
-    : foodItems.filter((item) =>
-        ["veg", "non-veg"].includes(filter) ? item.type === filter : item.category === filter
-      );
+  const filteredData = foodItems.filter(
+    (item) =>
+      filter === "All"
+        ? true
+        : ["veg", "non-veg"].includes(filter)
+        ? item.type === filter
+        : item.category === filter
+  );
 
   return (
     <div className="p-6">
@@ -90,13 +91,25 @@ function Foodlay() {
         {filteredData.map((item) => (
           <div
             key={item._id}
-            className="bg-white p-4 shadow-lg rounded-2xl flex flex-col items-center transform transition duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer"
-            onClick={() => {
-              setSelectedItem(item);
-              setQuantity(1);
-            }}
+            className={`bg-white p-4 shadow-lg rounded-2xl flex flex-col items-center transform transition duration-300 hover:scale-105 hover:shadow-2xl ${
+              item.stock < 2 ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+            }`}
+            onClick={() => item.stock >= 2 && setSelectedItem(item)}
           >
-            <img src={item.image} alt={item.name} className="w-32 h-32 object-cover rounded-lg" />
+            <div className="relative">
+              <img
+                src={item.image}
+                alt={item.name}
+                className={`w-32 h-32 object-cover rounded-lg ${
+                  item.stock < 2 ? "blur-sm grayscale" : ""
+                }`}
+              />
+              {item.stock < 2 && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white font-bold text-lg rounded-lg">
+                  Out of Stock
+                </span>
+              )}
+            </div>
             <h2 className="text-xl font-semibold mt-3">{item.name}</h2>
             <p className="text-gray-600 text-lg">₹{item.price}</p>
           </div>
@@ -167,3 +180,4 @@ function Foodlay() {
 }
 
 export default Foodlay;
+

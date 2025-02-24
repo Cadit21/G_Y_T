@@ -6,31 +6,40 @@ import CartPage from "./Components/Cartpage";
 import { CartProvider } from "./context/cartContext";
 import ChatWidget from "./Components/Chatwidget";
 import LoginForm from "./Components/LoginForm";
-import Register from "./Components/Register";
-import LoadingScreen from "./Components/LoadingScreen"; // Import the loading screen
 import RegisterForm from "./Components/RegisterForm";
+import LoadingScreen from "./Components/LoadingScreen";
+import CanteenLogin from "./Components/CanteenComponents/LoginFormCan"; // ✅ Import Canteen Login
+import CanteenRegister from "./Components/CanteenComponents/CanteenRegister"; // ✅ Import Canteen Register
+import CanteenDashboard from "./Components/CanteenComponents/CanteenDashboard"; // ✅ Import Canteen Dashboard
 
 function App() {
   const [loading, setLoading] = useState(true);
+  const showNavbar = !window.location.pathname.includes("canteen");
 
   useEffect(() => {
-    // Simulate a delay (or wait until resources load)
-    setTimeout(() => setLoading(false), 3000); // Adjust time as needed
+    setTimeout(() => setLoading(false), 3000);
   }, []);
 
   return (
     <CartProvider>
       <Router>
         {loading ? (
-          <LoadingScreen /> // Show loading screen while loading
+          <LoadingScreen />
         ) : (
           <>
-            <Navbar />
+            {showNavbar &&<Navbar />}
             <Routes>
+              {/* User Side */}
               <Route path="/" element={<Foodlay />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/login" element={<LoginForm />} />
               <Route path="/register" element={<RegisterForm />} />
+
+              {/* ✅ Canteen Side */}
+              <Route path="/canteen-login" element={<CanteenLogin />} />
+              <Route path="/canteen-register" element={<CanteenRegister />} />
+              <Route path="/canteen-dashboard" element={<CanteenDashboard/>} />
+              
             </Routes>
             <ChatWidget />
           </>

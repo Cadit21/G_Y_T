@@ -24,6 +24,11 @@ const foodSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    stock: {
+        type: Number,
+        default:100
+        
+    },
     timestamp: {
         type: Date,
         default: Date.now
