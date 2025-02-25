@@ -48,15 +48,111 @@ app.get('/', (req, res) => {
 });
 app.get("/api/cart/:userId", async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate("cart.productId");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const cart = await User.findOne({ _id: req.params.userId }).populate("cart.productId");
 
-    res.json({ cart: user.cart });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    res.json({ cart: cart.cart }); // Send populated cart array
   } catch (error) {
     console.error("Error fetching cart:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
+app.post("/api/cart/:userId", async (req, res) => {
+  try {
+    const { productId, quantity } = req.body; // Get productId and quantity from request
+    const user = await User.findOne({ _id: req.params.userId });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the product already exists in the cart
+    const existingItem = user.cart.find(item => item.productId.toString() === productId);
+
+    if (existingItem) {
+      // If exists, update the quantity
+      existingItem.quantity += quantity;
+    } else {
+      // If not, add a new item to the cart
+      user.cart.push({ productId, quantity });
+    }
+
+    await user.save();
+    res.status(200).json({ message: "Cart updated successfully", cart: user.cart });
+  } catch (error) {
+    console.error("Error updating cart:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+app.delete("/api/cart/:userId/:productId", async (req, res) => {
+  try {
+    const { userId, productId } = req.params;
+
+    // Ensure userId and productId are in ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid user ID or product ID format" });
+    }
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Remove the item from the cart
+    user.cart = user.cart.filter(
+      (item) => item.productId.toString() !== productId
+    );
+
+    // Save the updated user document
+    await user.save();
+
+    res.json({ message: "Item removed successfully", cart: user.cart });
+  } catch (error) {
+    console.error("Error removing item from cart:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Add or update cart item
+app.post("/api/cart/add", async (req, res) => {
+  try {
+    const { userId, productId, quantity } = req.body;
+
+    // Validate userId and productId...
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Check if the product is already in the cart
+    const existingItem = user.cart.find(
+      (item) => item.productId.toString() === productId
+    );
+
+    if (existingItem) {
+      // Update quantity
+      existingItem.quantity += quantity;
+    } else {
+      // Add new item
+      user.cart.push({ productId, quantity });
+    }
+
+    // Save the updated user
+    await user.save();
+
+    res.json({ message: "Cart updated successfully", cart: user.cart });
+  } catch (error) {
+    console.error("Error updating cart:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 
 
 
@@ -85,30 +181,74 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.put("/api/cart", async (req, res) => {
-  const { userId, cart } = req.body;
-
-  if (!userId || !cart) {
-    return res.status(400).json({ message: "Invalid request data" });
-  }
-
   try {
+    const { userId, cart } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format" });
+    }
+
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    // Ensure cart structure is correct
-    user.cart = cart.map(item => ({
-      productId: item.productId, // Ensure it's stored properly
-      quantity: item.quantity,
-      price: item.price, // Optional, but useful for tracking prices at the time of addition
-    }));
+    const updatedCart = [...user.cart];
 
+    cart.forEach((newItem) => {
+      const existingItem = updatedCart.find(
+        (cartItem) => cartItem.productId.toString() === newItem.productId.toString()
+      );
+
+      if (existingItem) {
+        existingItem.quantity += newItem.quantity;
+      } else {
+        updatedCart.push(newItem);
+      }
+    });
+
+    user.cart = updatedCart;
     await user.save();
+
     res.json({ message: "Cart updated successfully", cart: user.cart });
   } catch (error) {
     console.error("Error updating cart:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
+
+
+app.delete("/api/cart/:userId/:productId", async (req, res) => {
+  try {
+    const { userId, productId } = req.params;
+
+    // Ensure userId and productId are in ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+
+    // Fetch the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Remove the item from the cart
+    user.cart = user.cart.filter(
+      (cartItem) => cartItem.productId.toString() !== productId.toString()
+    );
+
+    // Save the updated user document
+    await user.save();
+
+    res.json({ message: "Item removed successfully", cart: user.cart });
+  } catch (error) {
+    console.error("Error removing item from cart:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 
 
 

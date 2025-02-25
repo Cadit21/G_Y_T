@@ -3,6 +3,7 @@ import { CartContext } from "../context/cartContext";
 import img from "../images/front.png";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import HomePage from "./homepage";
 
 function Foodlay() {
   const { addToCart } = useContext(CartContext);
@@ -67,9 +68,9 @@ function Foodlay() {
   );
 
   return (
-    <div className="p-6">
-      <img src={img} alt="Front" className="w-full object-cover rounded-lg shadow-md" />
-      <h1 className="text-3xl font-bold mb-4 text-center"></h1>
+    <>
+    <HomePage/>
+    <div className="container mx-auto px-4 py-8">
 
       {/* Filter Options */}
       <div className="flex flex-wrap justify-center gap-2 mb-6 px-2">
@@ -176,6 +177,7 @@ function Foodlay() {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }
 

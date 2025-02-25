@@ -5,91 +5,83 @@ export const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
+  const storedUser = JSON.parse(localStorage.getItem("user"));
+  const userId = storedUser?.id;
 
-  // Load cart from backend or local storage
+  // Load cart from backend when component mounts
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
-    if (storedUser) {
-      axios
-  .get(`http://localhost:5000/api/cart/${storedUser.id}`)
-  .then((response) => {
-    setCart(response.data.cart || []);
-  })
-  .catch((error) => {
-    console.error("Error loading cart:", error);
-    setCart([]);
-  });
+    if (!userId) return;
 
-    } else {
-      setCart([]);
-    }
-  }, []);
+    axios
+      .get(`http://localhost:5000/api/cart/${userId}`)
+      .then((response) => setCart(response.data.cart || []))
+      .catch((error) => {
+        console.error("Error loading cart:", error);
+        setCart([]); // Fallback to empty cart
+      });
+  }, [userId]);
 
+  // Function to update cart in backend
   const updateCart = async (updatedCart) => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
-    if (!storedUser) {
-      console.error("No stored user found");
-      return;
-    }
-  
-    console.log("Updating Cart with:", updatedCart);
-  
-    // Ensure productId is properly extracted
-    const cleanCart = updatedCart.map(({ __v, productId, ...rest }) => {
-      if (!productId) {
-        console.error("Missing productId for item:", rest);
-        return null; // Skip invalid items
-      }
-  
-      return {
-        productId: productId._id || productId, // Ensure correct ID format
-        ...rest,
-      };
-    }).filter(item => item !== null); // Remove invalid items
-  
+    if (!userId) return;
+
     try {
       await axios.put("http://localhost:5000/api/cart", {
-        userId: storedUser.id,
-        cart: cleanCart,
+        userId,
+        cart: updatedCart.map(({ __v, productId, ...rest }) => ({
+          productId: productId._id?.toString() || productId.toString(),
+          ...rest,
+        })),
       });
-      setCart(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
     } catch (error) {
       console.error("Error updating cart:", error);
     }
   };
-  const addToCart = (item, quantity) => {
-    if (!item || !item._id) {
-      console.error("Invalid item added to cart:", item);
-      return;
-    }
-  
-    setCart((prevCart) => {
-      const existingItemIndex = prevCart.findIndex(
-        (cartItem) => cartItem._id === item._id // Ensure correct ID check
-      );
-  
-      let updatedCart;
-      if (existingItemIndex !== -1) {
-        updatedCart = prevCart.map((cartItem, index) =>
-          index === existingItemIndex
-            ? { ...cartItem, quantity: cartItem.quantity + quantity }
-            : cartItem
-        );
-      } else {
-        updatedCart = [...prevCart, { ...item, quantity }];
-      }
-  
-      updateCart(updatedCart);
-      return updatedCart;
-    });
+  const removeFromCart = (productId) => {
+    setCart((prevCart) => prevCart.filter((item) => item.productId !== productId));
   };
-  
-  
+// Function to add an item to the cart
+// Function to add an item to the cart
+const addToCart = async (item, quantity) => {
+  if (!item || !item._id) {
+    console.error("Invalid item added to cart:", item);
+    return;
+  }
+
+  try {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    const userId = storedUser?.id;
+    const token = localStorage.getItem("token");
+
+    if (!userId || !token) {
+      throw new Error("User not authenticated. Please log in again.");
+    }
+
+    const response = await fetch(`http://localhost:5000/api/cart/${userId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ productId: item._id, quantity }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to add item to cart");
+    }
+
+    const data = await response.json();
+    setCart(data.cart); // Update the cart state with data from backend
+  } catch (err) {
+    console.error(err.message);
+  }
+};
+
 
   return (
-    <CartContext.Provider value={{ cart, addToCart }}>
+    <CartContext.Provider value={{ cart, setCart,addToCart,removeFromCart }}>
       {children}
     </CartContext.Provider>
   );
 };
+

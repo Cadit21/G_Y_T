@@ -11,6 +11,7 @@ import LoadingScreen from "./Components/LoadingScreen";
 import CanteenLogin from "./Components/CanteenComponents/LoginFormCan"; // ✅ Import Canteen Login
 import CanteenRegister from "./Components/CanteenComponents/CanteenRegister"; // ✅ Import Canteen Register
 import CanteenDashboard from "./Components/CanteenComponents/CanteenDashboard"; // ✅ Import Canteen Dashboard
+import HomePage from "./Components/homepage";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -27,9 +28,10 @@ function App() {
           <LoadingScreen />
         ) : (
           <>
-            {showNavbar &&<Navbar />}
+           
             <Routes>
               {/* User Side */}
+              
               <Route path="/" element={<Foodlay />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/login" element={<LoginForm />} />
