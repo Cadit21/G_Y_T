@@ -12,6 +12,7 @@ const crypto = require("crypto");
 const canteen_staff = require('./models/CanteenstaafModel');
 
 const cors = require('cors');
+const { appendFileSync } = require('fs');
 
 
 dotenv.config();
@@ -304,13 +305,44 @@ app.post("/api/register-canteen", async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 });
+
+
+
+
 app.get("/api/orders", async (req, res) => {
   try {
-    const orders = await Order.find().populate("userId", "username email").populate("items.productId", "name price");
+    const orders = await Order.find()
+      .populate("userId", "username") // ✅ Get username
+      .populate("items.productId", "name"); // ✅ Get product details
+
     res.json(orders);
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+app.put("/api/orders/:id", async (req, res) => {
+  try {
+    const { status } = req.body;
+    const orderId = req.params.id;
+
+    // Find and update order
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { status },
+      { new: true } // Return updated order
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -344,6 +376,8 @@ app.get("/api/orders/status/:status", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
 app.post("/api/orders", async (req, res) => {
   try {
     const { userId, items, paymentMethod } = req.body;
@@ -352,45 +386,62 @@ app.post("/api/orders", async (req, res) => {
       return res.status(400).json({ message: "Invalid order data" });
     }
 
-    // Fetch food details to validate items and calculate total price
-    const foodItems = await Food.find({ _id: { $in: items.map(item => item.foodId) } });
+    console.log("Received Items:", items); // Debugging line ✅
+
+    // Convert `productId` to ObjectId
+    const foodItems = await Food.find({
+      _id: { $in: items.map(item => new mongoose.Types.ObjectId(item.productId)) }
+    });
 
     if (!foodItems || foodItems.length !== items.length) {
       return res.status(400).json({ message: "Some food items are invalid" });
     }
 
-    // Calculate total price
     let totalPrice = 0;
-    const validatedItems = items.map(item => {
-      const food = foodItems.find(f => f._id.toString() === item.foodId);
-      totalPrice += food.price * item.quantity;
+    const validatedItems = [];
+    for (let item of items) {
+      const food = foodItems.find(f => f._id.toString() === item.productId);
+      if (!food) {
+        return res.status(400).json({ message: `Food item ${item.productId} not found` });
+      }
+      if (food.stock < item.quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${food.name}` });
+      }
 
-      return {
-        foodId: food._id,
+      totalPrice += food.price * item.quantity;
+      validatedItems.push({
+        productId: food._id, // ✅ Fixed Key
         name: food.name,
         quantity: item.quantity,
         price: food.price
-      };
-    });
+      });
 
-    // Create new order
+      // Update stock
+      food.stock -= item.quantity;
+      await food.save();
+    }
+
+    // Create order
     const newOrder = new Order({
       userId,
       items: validatedItems,
       totalPrice,
       paymentMethod,
-      status: "Pending"
+      status: "Pending",
+      orderDate: new Date()
     });
 
-    // Save order to database
     await newOrder.save();
 
     res.status(201).json({ message: "Order placed successfully", order: newOrder });
+
   } catch (error) {
     console.error("Error placing order:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 app.post("/api/food", async (req, res) => {
   try {
@@ -497,6 +548,39 @@ app.get("/api/bestselling", async (req, res) => {
   }
 });
 
+app.post("/api/login-canteen", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Check if user exists
+    const user = await canteen_staff.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found!" });
+    }
+
+    // Validate password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid email or password!" });
+    }
+
+    // Ensure role is "canteen_staff"
+    if (user.role !== "canteen_staff") {
+      return res.status(403).json({ message: "Access denied! Not a canteen owner." });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({ token, role: user.role, message: "Login successful!" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error!" });
+  }
+});
 
 
 

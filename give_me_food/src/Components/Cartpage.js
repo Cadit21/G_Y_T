@@ -1,4 +1,3 @@
-// CartPage.js
 import React, { useContext, useEffect, useState } from 'react';
 import { CartContext } from '../context/cartContext';
 import { Link } from 'react-router-dom';
@@ -46,34 +45,98 @@ function CartPage() {
     // Optimistically update the UI
     const updatedCart = cart.filter(item => item.productId._id !== productId);
     setCart(updatedCart);
-  
+
     try {
-      const storedUser = JSON.parse(localStorage.getItem("user"));
+      const storedUser = JSON.parse(localStorage.getItem('user'));
       const userId = storedUser?.id;
-  
-      if (!userId) throw new Error("User not found. Please log in again.");
-  
+
+      if (!userId) throw new Error('User not found. Please log in again.');
+
       const response = await fetch(`http://localhost:5000/api/cart/${userId}/${productId}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       if (!response.ok) {
-        throw new Error("Failed to remove item from cart");
+        throw new Error('Failed to remove item from cart');
       }
-  
-      // Optionally, you can refetch the cart from the server to ensure consistency
-      // const data = await response.json();
-      // setCart(data.cart);
     } catch (err) {
       // Revert the UI update if the API call fails
       setCart(cart);
       setError(err.message);
     }
   };
-  
 
   const totalAmount = cart.reduce((acc, item) => acc + (item.productId?.price || 0) * item.quantity, 0);
+
+  const placeOrder = async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("token");
+  
+      if (!storedUser || !storedUser.id) {
+        throw new Error("User not found. Please log in again.");
+      }
+  
+      if (!token) {
+        throw new Error("Authentication token missing. Please log in again.");
+      }
+  
+      if (!cart || cart.length === 0) {
+        throw new Error("Your cart is empty.");
+      }
+  
+      console.log('Cart Items:', cart); // Debugging log
+
+      
+  
+      // Prepare the order data
+      const orderData = {
+        userId: storedUser.id,
+        items: cart.map(item => ({
+          productId: item.productId._id,  // ✅ Send only the ID, not the full object
+          quantity: item.quantity
+        })),
+        paymentMethod: "UPI",
+      };
+      
+      
+      console.log("Fixed Order Data:", JSON.stringify(orderData, null, 2)); // Debugging log
+      
+      
+  
+      console.log("Order Data:", orderData);  // Debug log for the request body
+  
+      const response = await fetch("http://localhost:5000/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(orderData)
+      });
+  
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(`Failed to place order: ${errorMessage}`);
+      }
+  
+      const data = await response.json();
+      console.log("Order response:", data);
+  
+      alert("Order placed successfully!");
+      // ✅ Clear cart after successful order
+      localStorage.removeItem("cart"); 
+  
+    } catch (error) {
+      console.error("Error placing order:", error.message);
+      alert(error.message);
+    }
+  };
+  
+  
+  
+  
 
   if (loading) return <LoadingScreen />; // Render the custom loading screen
   if (error) return <div className="text-center mt-4 text-red-500">{error}</div>;
@@ -121,13 +184,13 @@ function CartPage() {
           </ul>
           <div className="mt-4 text-right font-semibold text-xl">Total: ₹{totalAmount}</div>
 
-          {/* Proceed to Pay Button */}
+          {/* Place Order Button */}
           <div className="mt-6 flex justify-center">
             <button
               className="bg-green-500 text-white px-6 py-3 rounded-lg shadow hover:bg-green-600 transition"
-              onClick={() => alert('Proceeding to payment...')}
+              onClick={placeOrder}
             >
-              Proceed to Pay
+              Place Order
             </button>
           </div>
         </div>

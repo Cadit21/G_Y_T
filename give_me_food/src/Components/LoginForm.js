@@ -27,13 +27,19 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); // Show loading screen
-
+    
+     
+    
     try {
       const res = await axios.post("http://localhost:5000/api/login", { email, password });
 
       // Store token and user data in localStorage
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
+      const userRole = res.data.user?.role || "user"; // Ensure role is set
+    localStorage.setItem("role", userRole);
+    window.dispatchEvent(new Event("storage")); // Force reactivity
+    
 
       // Show success message
       setMessage("Login successful! Redirecting...");

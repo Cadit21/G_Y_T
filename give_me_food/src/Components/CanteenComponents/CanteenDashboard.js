@@ -16,17 +16,80 @@ const CanteenDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    
     fetchProducts();
-  }, []);
+     if (view === "orders") {
+    fetchOrders();
+  } else if (view === "Order History") {
+    fetchOrderHistory();
+  }
+}, [view]);
 
-  const fetchOrders = async () => {
+
+const fetchOrders = async () => {
+  try {
+    const res = await axios.get("http://localhost:5000/api/orders");
+
+    const ordersWithDetails = (res.data || []).map(order => ({
+      ...order,
+      customerName: order.userId?.username || "Unknown", // ✅ Show username
+      items: order.items.map(item => ({
+        name: item.productId?.name || "Unknown Item", // ✅ Show product name
+        quantity: item.quantity,
+        price: item.price
+      }))
+    })).filter(order => order.status !== "Completed");
+
+    setOrders(ordersWithDetails);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    setOrders([]);
+  }
+};
+
+
+  const fetchOrderHistory = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/orders");
-      setOrders(res.data || []);
+      const res = await axios.get("http://localhost:5000/api/orders"); // Use `/order-history` if backend is updated
+      setOrders((res.data || []).filter(order => order.status === "Completed")); // ✅ Show only completed orders
     } catch (error) {
-      console.error("Error fetching orders:", error);
+      console.error("Error fetching order history:", error);
       setOrders([]);
+    }
+  };
+  
+  
+  const handleStatusChange = async (orderId, newStatus) => {
+    try {
+      console.log("Updating order:", orderId, "to status:", newStatus);
+  
+      const res = await axios.put(`http://localhost:5000/api/orders/${orderId}`, { status: newStatus });
+  
+      console.log("Order updated successfully:", res.data);
+  
+      if (newStatus === "Completed") {
+        // ✅ Remove order from UI if marked as Completed
+        setOrders(orders.filter(order => order._id !== orderId));
+      } else {
+        // ✅ Otherwise, just update order status in UI
+        setOrders(orders.map(order => 
+          order._id === orderId ? { ...order, status: newStatus } : order
+        ));
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error.response?.data || error.message);
+    }
+  };
+  
+  
+  
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await axios.put(`http://localhost:5000/api/orders/${orderId}`, { status: newStatus });
+      setOrders(orders.map(order => order._id === orderId ? { ...order, status: newStatus } : order));
+    } catch (error) {
+      console.error("Error updating order status:", error);
     }
   };
   const handleAddProduct = async () => {
@@ -103,34 +166,89 @@ const CanteenDashboard = () => {
     ></div>
   )}
       <div className={`fixed md:relative bg-white z-10 transition-transform transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:w-64 w-3/4 h-full shadow-lg`}>  
-        <Sidebar menuItems={["Today's Sales","Order History","Best Selling Items"]} onMenuSelect={(view) => { setView(view.toLowerCase()); setSidebarOpen(false); }} />
+        <Sidebar menuItems={["Today's Sales","Order History","Best Selling Items"]} onMenuSelect={(view) => {  setView(view); setSidebarOpen(false); }} />
       </div>
       <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
-        <h1 className="text-2xl md:text-3xl font-bold mb-4">Canteen Dashboard</h1>
+        
 
         <div className="flex flex-wrap gap-4 mb-4">
           <Button onClick={() => setView("orders")} variant="outline">View Orders</Button>
           <Button onClick={() => setView("products")} variant="outline">View Products</Button>
         </div>
+        
 
         {view === "orders" && (
   <Card title="Orders">
     <div className="overflow-x-auto">
       <Table
-        headers={["Order ID", "Customer Name", "Items", "Total Price", "Status"]}
-        data={orders
-          .filter(order => order.status === "Pending" || order.status === "Preparing") // Filter orders
-          .map((order) => ({
-            "Order ID": order._id,
-            "Customer Name": order.customerName,
-            "Items": order.items.map((item) => `${item.name} (x${item.quantity})`).join(", "),
-            "Total Price": `₹${order.totalPrice}`,
-            "Status": order.status
-          }))}
+        headers={["Order ID", "Customer Name", "Items", "Total Price", "Status", "Actions"]}
+        data={orders.map((order) => ({
+          "Order ID": order._id,
+          "Customer Name": order.customerName,
+          "Items": order.items.map((item) => `${item.name} (x${item.quantity})`).join(", "),
+          "Total Price": `₹${order.totalPrice}`,
+          "Status": (
+            <select
+              value={order.status}
+              onChange={(e) => handleStatusChange(order._id, e.target.value)}
+              className="border p-1 rounded"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Preparing">Preparing</option>
+              <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          ),
+          "Actions": (
+            <button
+              onClick={() => handleStatusChange(order._id, "Completed")}
+              className="bg-green-500 text-white px-2 py-1 rounded"
+            >
+              Mark as Completed
+            </button>
+          )
+        }))}
       />
     </div>
   </Card>
 )}
+
+<div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
+  
+
+  {/* Render different sections based on selected view */}
+  {view === "Today's Sales" && (
+    <Card title="Today's Sales">
+      <p>Show sales statistics, total revenue, and orders for today.</p>
+    </Card>
+  )}
+
+{view === "Order History" && (
+  <Card title="Order History">
+    <Table
+      headers={["Order ID", "Customer Name", "Items", "Total Price", "Date", "Status"]}
+      data={orders
+        .filter(order => order.status === "Completed") // ✅ Filter only completed orders
+        .map((order) => ({
+          "Order ID": order._id,
+          "Customer Name": order.customerName,
+          "Items": order.items.map((item) => `${item.name} (x${item.quantity})`).join(", "),
+          "Total Price": `₹${order.totalPrice}`,
+          "Date": new Date(order.createdAt).toLocaleDateString(),
+          "Status": order.status
+        }))}
+    />
+  </Card>
+)}
+
+
+  {view === "Best Selling Items" && (
+    <Card title="Best Selling Items">
+      <p>Show list of best-selling items based on order frequency.</p>
+    </Card>
+  )}
+</div>
+
 
         
 
