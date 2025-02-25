@@ -31,7 +31,7 @@ const HomePage = () => {
   return (
     <div
       className="h-screen w-full bg-cover bg-center flex flex-col relative"
-      style={{ backgroundImage: "url('/assets/bg.png')" }}
+      style={{ backgroundImage: "url('/assets/bg3.png')" }}
     >
       <nav className="absolute top-0 left-0 w-full bg-transparent p-4 flex flex-wrap items-center justify-between shadow-md z-10">
         {/* Logo */}
