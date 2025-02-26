@@ -32,7 +32,7 @@ function App() {
             <Routes>
               {/* User Side */}
               
-              <Route path="/" element={<Foodlay />} />
+              <Route path="/" element={<HomePage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/login" element={<LoginForm />} />
               <Route path="/register" element={<RegisterForm />} />

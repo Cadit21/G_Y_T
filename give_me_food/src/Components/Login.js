@@ -1,97 +1,86 @@
-import { useState } from "react";
-import axios from "axios";
+import React, { useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiMail, FiLock } from "react-icons/fi";
-import LoadingScreen from "./LoadingScreen";
+import { CartContext } from "../context/cartContext";
+import img from "../images/tray.jpg";
 
-const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState(null); // State for message
-  const [messageType, setMessageType] = useState(""); // "success" or "error"
+const HomePage = () => {
+  const { cart } = useContext(CartContext);
   const navigate = useNavigate();
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await axios.post("http://localhost:5000/api/login", { email, password });
-  
-      // Store token and user data in localStorage
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user)); // 🔥 Store user details
-  
-      console.log("User stored in localStorage:", res.data.user); // Debugging
-  
-      // Show success message
-      setMessage("Login successful! Redirecting...");
-      setMessageType("success");
-  
-      setTimeout(() => {
-        setLoading(false);
-        navigate("/");
-      }, 2000);
-      
-    } catch (error) {
-      setMessage(error.response?.data?.message || "Login failed");
-      setMessageType("error");
+  const token = localStorage.getItem("token");
+
+  // Calculate total items in cart
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Handle cart click
+  const handleCartClick = () => {
+    if (token) {
+      navigate("/cart");
+    } else {
+      alert("Please log in to view your cart!");
+      navigate("/login");
     }
   };
-  
+
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem("token"); // Remove token
+    navigate("/"); // Redirect to homepage
+    window.location.reload(); // Reload to update UI
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-orange-200 to-orange-300 px-4">
-      <div className="bg-white bg-opacity-30 backdrop-blur-md shadow-xl rounded-xl p-8 w-full max-w-md text-center">
-        <h2 className="text-3xl font-extrabold text-orange-600 mb-4">Login</h2>
+    <div
+      className="h-screen w-full bg-cover bg-center flex flex-col relative"
+      style={{ backgroundImage: "url('/assets/bg.png')" }}
+    >
+      <nav className="absolute top-0 left-0 w-full bg-transparent p-4 flex flex-wrap items-center justify-between shadow-md z-10">
+        {/* Logo */}
+        <img src="/assets/logo2.png" alt="Logo" className="h-8 md:h-10" />
 
-        {message && (
-          <div
-            className={`p-3 mb-4 rounded-lg text-white ${
-              messageType === "success" ? "bg-green-500" : "bg-red-500"
-            }`}
-          >
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div className="relative">
-            <FiMail className="absolute left-3 top-3 text-gray-600" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              className="w-full pl-10 pr-4 py-2 bg-white bg-opacity-50 border border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-800"
-              required
+        {/* Search Bar */}
+        <div className="flex-grow mx-4 hidden sm:flex justify-center">
+          <div className="relative w-full max-w-lg">
+            <input 
+              type="text" 
+              placeholder="Search for something cool..." 
+              className="w-full px-4 py-2 bg-transparent text-white placeholder-gray-400 border border-gray-500 rounded-full focus:outline-none focus:ring-2 focus:ring-orange-400 shadow-sm transition-all duration-200"
             />
+            <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-orange-400 hover:text-orange-500 transition-all">
+              <svg className="text-white" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"> 
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/> 
+              </svg>
+            </button>
           </div>
+        </div>
 
-          <div className="relative">
-            <FiLock className="absolute left-3 top-3 text-gray-600" />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full pl-10 pr-4 py-2 bg-white bg-opacity-50 border border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-800"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-orange-600 text-white py-2 rounded-lg font-semibold text-lg hover:bg-orange-700 transition-all duration-300"
-          >
-            Login
+        {/* Navigation Links */}
+        <div className="flex items-center space-x-2 md:space-x-4">
+          <button onClick={handleCartClick} className="relative">
+            <img src={img} alt="Tray" className="h-8 md:h-10 bg-white p-1 rounded-full" />
+            {totalItems > 0 && (
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {totalItems}
+              </span>
+            )}
           </button>
-        </form>
 
-        <p className="text-orange-600 mt-4">
-          Don't have an account? <a href="/register" className="underline">Sign Up</a>
-        </p>
-      </div>
+          {token ? (
+            <button 
+              onClick={handleLogout} 
+              className="px-3 py-1 text-white text-sm md:text-lg font-semibold hover:text-red-400"
+            >
+              Logout
+            </button>
+          ) : (
+            <>
+              <a href="/login" className="px-3 py-1 text-white text-sm md:text-lg font-semibold hover:text-orange-400">Login</a>
+              <a href="/register" className="px-3 py-1 text-white text-sm md:text-lg font-semibold hover:text-orange-400">Register</a>
+            </>
+          )}
+        </div>
+      </nav>
     </div>
   );
 };
 
-export default Login;
+export default HomePage;
