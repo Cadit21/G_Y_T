@@ -12,7 +12,11 @@ import CanteenLogin from "./Components/CanteenComponents/LoginFormCan"; // ✅ I
 import CanteenRegister from "./Components/CanteenComponents/CanteenRegister"; // ✅ Import Canteen Register
 import CanteenDashboard from "./Components/CanteenComponents/CanteenDashboard"; // ✅ Import Canteen Dashboard
 import HomePage from "./Components/homepage";
-
+import AdminRegister from "./Components/Admin/Amin_register"; // ✅ Import Admin Register
+import AdminLogin from "./Components/Admin/Admin_login"; // ✅ Import Admin Login
+import OrderStatus from "./Components/Statuspage";
+import Orders from "./Components/Orders";
+import AdminDashboard from "./Components/Admin/Admin_dashboard"; // ✅ Import Admin Dashboard
 function App() {
   const [loading, setLoading] = useState(true);
   const showNavbar = !window.location.pathname.includes("canteen");
@@ -31,16 +35,27 @@ function App() {
            
             <Routes>
               {/* User Side */}
+           
               
               <Route path="/" element={<HomePage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/login" element={<LoginForm />} />
               <Route path="/register" element={<RegisterForm />} />
+              <Route path="/order-status/:orderId" element={<OrderStatus />} />
+              <Route path="/orders" element={<Orders />} />
+
+
 
               {/* ✅ Canteen Side */}
               <Route path="/canteen-login" element={<CanteenLogin />} />
               <Route path="/canteen-register" element={<CanteenRegister />} />
               <Route path="/canteen-dashboard" element={<CanteenDashboard/>} />
+
+              {/* Admin side*/}
+
+              <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin-register" element={<AdminRegister />} />
+              <Route path="/admin-dashboard" element={<AdminDashboard />} />
               
             </Routes>
             <ChatWidget />

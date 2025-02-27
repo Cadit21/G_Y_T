@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from "react";
-import Sidebar from "./ui/Sidebar";
-import Card from "./ui/Card";
-import Button from "./ui/Button";
-import Table from "./ui/Table";
+import Sidebar from "../CanteenComponents/ui/Sidebar";
+import Card from "../CanteenComponents/ui/Card";
+import Button from "../CanteenComponents/ui/Button";
+import Table from "../CanteenComponents/ui/Table";
 import axios from "axios";
 import { FiMenu } from "react-icons/fi";
+import { Bar } from "react-chartjs-2";
+import "chart.js/auto";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
-const CanteenDashboard = () => {
+
+const AdminDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [view, setView] = useState("orders");
@@ -14,6 +19,9 @@ const CanteenDashboard = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [newProduct, setNewProduct] = useState({ name: "", price: "", category: "", description: "", stock: "" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [salesData, setSalesData] = useState({ labels: [], datasets: [] });
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
 
   useEffect(() => {
     fetchProducts();
@@ -22,12 +30,38 @@ const CanteenDashboard = () => {
       fetchOrders();
     } else if (view === "Order History") {
       fetchOrderHistory();
-    } else if (view === "Best Selling Items") {
+     } else if (view === "Sales") fetchSalesData();
+    else if (view === "Best Selling Items") {
       fetchBestSellingItems(); // Fetch best-selling items when this view is selected
     }
   }, [view]);
   
+  const fetchSalesData = async () => {
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/sales?date=${selectedDate.toISOString().split("T")[0]}`
+      );
+      const sales = res.data || [];
+      
+      const labels = sales.map((item) => item.foodName);
+      const revenueData = sales.map((item) => item.revenue);
 
+      setSalesData({
+        labels,
+        datasets: [
+          {
+            label: "Total Revenue",
+            data: revenueData,
+            backgroundColor: "rgba(54, 162, 235, 0.6)",
+            borderColor: "rgba(54, 162, 235, 1)",
+            borderWidth: 1,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("Error fetching sales data:", error);
+    }
+  };
 
 const fetchOrders = async () => {
   try {
@@ -169,13 +203,13 @@ const fetchOrders = async () => {
       });
   
       console.log("Final Aggregated Product Sales:", productSales);
-      setBestSellingItems(productSales); // ✅ Update state here
+      const sortedProductSales = Object.values(productSales).sort((a, b) => b.quantity - a.quantity);
+      setBestSellingItems(sortedProductSales); // ✅ Update state with sorted items
   
     } catch (error) {
       console.error("Error fetching best-selling items:", error);
     }
   };
-  
   
   
 
@@ -203,7 +237,7 @@ const fetchOrders = async () => {
     ></div>
   )}
       <div className={`fixed md:relative bg-white z-10 transition-transform transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:w-64 w-3/4 h-full shadow-lg`}>  
-        <Sidebar menuItems={["Order History","Best Selling Items"]} onMenuSelect={(view) => {  setView(view); setSidebarOpen(false); }} />
+        <Sidebar menuItems={["Order History","Best Selling Items","Sales"]} onMenuSelect={(view) => {  setView(view); setSidebarOpen(false); }} />
       </div>
       <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
         
@@ -277,6 +311,20 @@ const fetchOrders = async () => {
     />
   </Card>
 )}
+
+{view === "Sales" && (
+          <Card title="Date-wise Sales">
+            <div className="mb-4">
+              <label className="block text-gray-700">Select Date:</label>
+              <DatePicker
+                selected={selectedDate}
+                onChange={(date) => setSelectedDate(date)}
+                className="border p-2 rounded"
+              />
+            </div>
+            <Bar data={salesData} />
+          </Card>
+        )}
 
 
 {view === "Best Selling Items" && (
@@ -376,4 +424,4 @@ const fetchOrders = async () => {
   );
 };
 
-export default CanteenDashboard;
+export default AdminDashboard;

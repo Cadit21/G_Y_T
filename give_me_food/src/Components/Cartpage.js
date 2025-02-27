@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { CartContext } from '../context/cartContext';
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen'; // Adjust the path as needed
 
 function CartPage() {
@@ -8,6 +9,7 @@ function CartPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
+   const navigate = useNavigate(); 
 
   useEffect(() => {
     const fetchCart = async () => {
@@ -87,25 +89,18 @@ function CartPage() {
       }
   
       console.log('Cart Items:', cart); // Debugging log
-
-      
   
       // Prepare the order data
       const orderData = {
         userId: storedUser.id,
         items: cart.map(item => ({
-          productId: item.productId._id,  // ✅ Send only the ID, not the full object
+          productId: item.productId._id,  // Ensure only product ID is sent
           quantity: item.quantity
         })),
         paymentMethod: "UPI",
       };
-      
-      
-      console.log("Fixed Order Data:", JSON.stringify(orderData, null, 2)); // Debugging log
-      
-      
   
-      console.log("Order Data:", orderData);  // Debug log for the request body
+      console.log("Order Data:", JSON.stringify(orderData, null, 2)); 
   
       const response = await fetch("http://localhost:5000/api/orders", {
         method: "POST",
@@ -124,9 +119,16 @@ function CartPage() {
       const data = await response.json();
       console.log("Order response:", data);
   
+      if (!data.order._id) {
+        throw new Error("Invalid order response: Order ID is missing.");
+      }
+  
+      // ✅ Navigate to the order status page with the correct order ID
+      navigate(`/order-status/${data.order._id}`);
+  
+      // Clear cart after successful order
+      localStorage.removeItem("cart");
       alert("Order placed successfully!");
-      // ✅ Clear cart after successful order
-      localStorage.removeItem("cart"); 
   
     } catch (error) {
       console.error("Error placing order:", error.message);

@@ -10,6 +10,8 @@ const Order = require('./models/OrderModel');
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const canteen_staff = require('./models/CanteenstaafModel');
+const Admin = require('./models/AdminModel');
+const Sales= require('./models/SalesModel');
 
 const cors = require('cors');
 const { appendFileSync } = require('fs');
@@ -321,6 +323,21 @@ app.get("/api/orders", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+app.get("/api/orders/:id", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate("items.productId", "name price")
+      .exec();
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    res.json(order);
+  } catch (error) {
+    console.error("Error fetching order:", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 app.put("/api/orders/:id", async (req, res) => {
@@ -345,6 +362,18 @@ app.put("/api/orders/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+app.get("/api/orders/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const orders = await Order.find({ userId }).populate("items.productId");
+    res.status(200).json(orders);
+  } catch (error) {
+    console.error("Error fetching user orders:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 app.get("/api/orders/user/:userId", async (req, res) => {
   try {
@@ -464,12 +493,15 @@ app.post("/api/food", async (req, res) => {
 // ✅ **3. Update a Product**
 app.put("/api/food/:id", async (req, res) => {
   try {
-    const { name, price, category, type, image,stock } = req.body;
+    const { _id, timestamp, __v, ...updateData } = req.body; // Exclude fields that should not be updated
+
+    console.log("Product ID:", req.params.id);
+    console.log("Filtered Update Data:", updateData);
 
     const updatedProduct = await Food.findByIdAndUpdate(
       req.params.id,
-      { $set: { name, price, category, type, image ,stock } }, // Only update the provided fields
-      { new: true, runValidators: true } // Ensure validation is applied
+      { $set: updateData }, // Only update valid fields
+      { new: true, runValidators: true }
     );
 
     if (!updatedProduct) {
@@ -478,10 +510,12 @@ app.put("/api/food/:id", async (req, res) => {
 
     res.json(updatedProduct);
   } catch (error) {
-    console.error("Error updating product:", error);
-    res.status(500).json({ error: "Failed to update product" });
+    console.error("Error updating product:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
+
+
 
 
 // ✅ **4. Delete a Product**
@@ -523,7 +557,11 @@ app.get("/api/bestselling", async (req, res) => {
     const itemSales = {};
 
     orders.forEach((order) => {
+      if (!Array.isArray(order.items)) return; // Ensure items is an array
+
       order.items.forEach((item) => {
+        if (!item.name) return; // Skip invalid items
+
         if (!itemSales[item.name]) {
           itemSales[item.name] = {
             name: item.name,
@@ -532,21 +570,23 @@ app.get("/api/bestselling", async (req, res) => {
             revenue: 0,
           };
         }
-        itemSales[item.name].totalSold += item.quantity;
-        itemSales[item.name].revenue += item.price * item.quantity;
+        itemSales[item.name].totalSold += item.quantity || 0;
+        itemSales[item.name].revenue += (item.price || 0) * (item.quantity || 0);
       });
     });
 
-    const bestSellingItems = Object.values(itemSales).sort(
-      (a, b) => b.totalSold - a.totalSold
+    // Find the best-selling item
+    const bestSellingItem = Object.values(itemSales).reduce((max, item) => 
+      item.totalSold > max.totalSold ? item : max, { totalSold: 0 }
     );
 
-    res.json(bestSellingItems);
+    res.json(bestSellingItem.totalSold > 0 ? bestSellingItem : { message: "No sales data found" });
   } catch (error) {
-    console.error("Error fetching best-selling items:", error);
+    console.error("Error fetching best-selling item:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 app.post("/api/login-canteen", async (req, res) => {
   const { email, password } = req.body;
@@ -582,7 +622,82 @@ app.post("/api/login-canteen", async (req, res) => {
   }
 });
 
+app.post("/admin/register", async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
+    const existingAdmin = await Admin.findOne({ username });
+    if (existingAdmin) return res.status(400).json({ error: "Admin already exists" });
+
+    const newAdmin = new Admin({ username, password });
+    await newAdmin.save();
+    res.status(201).json({ message: "Admin created" });
+  } catch (error) {
+    res.status(500).json({ error: "Error registering admin" });
+  }
+});
+
+// Admin Login
+app.post("/admin/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const admin = await Admin.findOne({ username });
+    if (!admin) return res.status(401).json({ error: "Invalid username or password" });
+
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) return res.status(401).json({ error: "Invalid username or password" });
+
+    const token = jwt.sign({ id: admin._id }, "secretKey", { expiresIn: "1h" });
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: "Error logging in" });
+  }
+});
+
+
+
+// Route to fetch all sales (based on orders)
+app.get('/api/sales', async (req, res) => {
+  try {
+    const sales = await Order.find()
+      .select('totalPrice orderDate') // Only select the necessary fields: totalPrice and orderDate
+      .sort({ orderDate: -1 }); // Sort by the latest order first
+
+    res.json(sales);
+  } catch (error) {
+    console.error('Error fetching sales:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Route to fetch sales by date range (based on orders)
+app.get('/api/sales/date', async (req, res) => {
+  const { startDate } = req.query;
+
+  try {
+    if (!startDate ) {
+      return res.status(400).json({ message: 'Start date and end date are required' });
+    }
+
+    const sales = await Order.find({
+      orderDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      }
+    })
+      .select('totalPrice orderDate')
+      .sort({ orderDate: -1 });
+
+    console.log(sales);
+
+    res.json(sales);
+  
+  } catch (error) {
+    console.error('Error fetching sales by date range:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 
 
