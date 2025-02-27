@@ -65,6 +65,64 @@ app.get("/api/cart/:userId", async (req, res) => {
   }
 });
 
+app.get("/api/sales/total", async (req, res) => {
+  try {
+    const totalSales = await Order.aggregate([
+      { $match: { status: "Completed" } },
+      { $group: { _id: null, totalRevenue: { $sum: "$totalPrice" } } }
+    ]);
+    res.json({ totalSales: totalSales[0]?.totalRevenue || 0 });
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/sales/payment-method", async (req, res) => {
+  try {
+    const salesByPayment = await Order.aggregate([
+      { $match: { status: "Completed" } },
+      { $group: { _id: "$paymentMethod", totalRevenue: { $sum: "$totalPrice" } } }
+    ]);
+    res.json(salesByPayment);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/sales/food-item", async (req, res) => {
+  try {
+    const salesByFood = await Order.aggregate([
+      { $match: { status: "Completed" } },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.foodName",
+          totalSold: { $sum: "$items.quantity" },
+          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } } // Corrected revenue calculation
+        }
+      }
+    ]);
+    res.json(salesByFood);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/sales/daily", async (req, res) => {
+  try {
+    const salesByDate = await Order.aggregate([
+      { $match: { status: "Completed" } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$orderDate" } }, totalRevenue: { $sum: "$totalPrice" } } },
+      { $sort: { _id: 1 } }
+    ]);
+    res.json(salesByDate);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+
 app.post("/api/cart/:userId", async (req, res) => {
   try {
     const { productId, quantity } = req.body; // Get productId and quantity from request

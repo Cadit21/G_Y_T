@@ -5,10 +5,13 @@ import Button from "../CanteenComponents/ui/Button";
 import Table from "../CanteenComponents/ui/Table";
 import axios from "axios";
 import { FiMenu } from "react-icons/fi";
-import { Bar } from "react-chartjs-2";
-import "chart.js/auto";
-import DatePicker from "react-datepicker";
+
 import "react-datepicker/dist/react-datepicker.css";
+
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+import { PieChart, Pie, Cell } from "recharts";
+
 
 
 const AdminDashboard = () => {
@@ -21,7 +24,21 @@ const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [salesData, setSalesData] = useState({ labels: [], datasets: [] });
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [salesByPayment, setSalesByPayment] = useState([]);
+  const [salesByFood, setSalesByFood] = useState([]);
+  const [salesByDate, setSalesByDate] = useState([]);
+  const [totalSales, setTotalSales] = useState(0);
+  
+  
+  const [bestSellingItems, setBestSellingItems] = useState([]);
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#A28CFF", "#FF6384"];
 
+
+
+
+
+  
+  
 
   useEffect(() => {
     fetchProducts();
@@ -36,32 +53,40 @@ const AdminDashboard = () => {
     }
   }, [view]);
   
+  
   const fetchSalesData = async () => {
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/sales?date=${selectedDate.toISOString().split("T")[0]}`
-      );
-      const sales = res.data || [];
-      
-      const labels = sales.map((item) => item.foodName);
-      const revenueData = sales.map((item) => item.revenue);
-
-      setSalesData({
-        labels,
-        datasets: [
-          {
-            label: "Total Revenue",
-            data: revenueData,
-            backgroundColor: "rgba(54, 162, 235, 0.6)",
-            borderColor: "rgba(54, 162, 235, 1)",
-            borderWidth: 1,
-          },
-        ],
+      console.log("Fetching sales data...");
+  
+      const [totalRes, paymentRes, foodRes, dateRes] = await Promise.all([
+        axios.get("http://localhost:5000/api/sales/total"),
+        axios.get("http://localhost:5000/api/sales/payment-method"),
+        axios.get("http://localhost:5000/api/sales/food-item"),
+        axios.get("http://localhost:5000/api/sales/daily"),
+      ]);
+  
+      console.log("Sales data fetched successfully:", {
+        totalSales: totalRes.data,
+        salesByPayment: paymentRes.data,
+        salesByFood: foodRes.data,
+        salesByDate: dateRes.data,
       });
+  
+      setTotalSales(totalRes.data?.totalSales || 0);
+      setSalesByPayment(paymentRes.data || []);
+      setSalesByFood(foodRes.data || []);
+      setSalesByDate(dateRes.data || []);
     } catch (error) {
-      console.error("Error fetching sales data:", error);
+      console.error("Error fetching sales data:", error.response ? error.response.data : error.message);
+      
+      // Update state to reflect the error
+      setTotalSales(0);
+      setSalesByPayment([]);
+      setSalesByFood([]);
+      setSalesByDate([]);
     }
   };
+  
 
 const fetchOrders = async () => {
   try {
@@ -181,7 +206,7 @@ const fetchOrders = async () => {
       console.error("Error deleting product", error);
     }
   };
-  const [bestSellingItems, setBestSellingItems] = useState({});
+ 
 
   const fetchBestSellingItems = async () => {
     try {
@@ -287,12 +312,7 @@ const fetchOrders = async () => {
 <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
   
 
-  {/* Render different sections based on selected view */}
-  {view === "Today's Sales" && (
-    <Card title="Today's Sales">
-      <p>Show sales statistics, total revenue, and orders for today.</p>
-    </Card>
-  )}
+  
 
 {view === "Order History" && (
   <Card title="Order History">
@@ -313,18 +333,60 @@ const fetchOrders = async () => {
 )}
 
 {view === "Sales" && (
-          <Card title="Date-wise Sales">
-            <div className="mb-4">
-              <label className="block text-gray-700">Select Date:</label>
-              <DatePicker
-                selected={selectedDate}
-                onChange={(date) => setSelectedDate(date)}
-                className="border p-2 rounded"
-              />
-            </div>
-            <Bar data={salesData} />
-          </Card>
-        )}
+  <Card title="Total Sales">
+    <p className="text-lg font-bold">₹{totalSales}</p>
+
+    {/* Sales Over Time - Line Chart */}
+    <h2 className="text-lg font-bold mt-4">Sales Over Time</h2>
+    {Array.isArray(salesByDate) && salesByDate.length > 0 ? (
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart
+          data={salesByDate.map(sale => ({
+            date: sale?._id || "Unknown",
+            revenue: sale?.totalRevenue || 0,
+          }))}
+        >
+          <XAxis dataKey="date" />
+          <YAxis />
+          <CartesianGrid stroke="#ccc" />
+          <Tooltip />
+          <Legend />
+          <Line type="monotone" dataKey="revenue" stroke="#8884d8" />
+        </LineChart>
+      </ResponsiveContainer>
+    ) : (
+      <p className="text-red-500">⚠️ No sales data available. Check API response.</p>
+    )}
+
+    {/* Food Sales Contribution - Pie Chart */}
+    <h2 className="text-lg font-bold mt-6">Sales Contribution by Food</h2>
+    {Array.isArray(salesByFood) && salesByFood.length > 0 ? (
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={salesByFood.map((food, index) => ({
+              name: food?._id || "Unknown",
+              value: food?.revenue || 0,
+            }))}
+            cx="50%"
+            cy="50%"
+            outerRadius={100}
+            fill="#8884d8"
+            dataKey="value"
+            label
+          >
+            {salesByFood.map((_, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+        </PieChart>
+      </ResponsiveContainer>
+    ) : (
+      <p className="text-red-500">⚠️ No food sales data available.</p>
+    )}
+  </Card>
+)}
 
 
 {view === "Best Selling Items" && (

@@ -10,7 +10,7 @@ const Sidebar = ({ menuItems, onMenuSelect, activeItem }) => {
   return (
     <div className="w-64 h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white p-6 shadow-xl rounded-r-lg">
       <h2 className="text-2xl font-semibold mb-6 tracking-wide text-gray-200">
-        Canteen Dashboard
+         Dashboard
       </h2>
       <ul className="space-y-2">
         {menuItems.map((item, index) => (
