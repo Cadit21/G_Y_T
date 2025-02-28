@@ -1,26 +1,34 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
-const db= require('./db');
-const dotenv = require('dotenv');
-const Food = require('./models/foodModel');
-const User = require('./models/UserModel');
-const Order = require('./models/OrderModel');
-const Razorpay = require("razorpay");
-const crypto = require("crypto");
-const canteen_staff = require('./models/CanteenstaafModel');
-const Admin = require('./models/AdminModel');
-const Sales= require('./models/SalesModel');
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
 
-const cors = require('cors');
-const { appendFileSync } = require('fs');
-
+const db = require("./db");
+const Food = require("./models/foodModel");
+const User = require("./models/UserModel");
+const Order = require("./models/OrderModel");
+const ChatMessage = require("./models/ChatMessage");
+const CanteenStaff = require("./models/CanteenStaafModel");
+const Admin = require("./models/AdminModel");
+const Sales = require("./models/SalesModel");
 
 dotenv.config();
 const app = express();
+
+// 🔧 CORS Configuration (Dynamic)
 const corsOptions = {
-  origin: "http://localhost:3001",
+  origin: (origin, callback) => {
+    const allowedOrigins = ["http://localhost:3000", "http://localhost:3001"];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Content-Type,Authorization",
@@ -30,24 +38,283 @@ app.use(cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Middleware
-app.get("/api/food", async (req, res) => {
-  try {
-      if (!mongoose.connection.readyState) {
-          return res.status(500).json({ message: "Database not connected" });
+// 🖥️ Create HTTP Server
+const server = http.createServer(app);
+
+// 🔌 Setup Socket.io
+const io = new Server(server, {
+  cors: { origin: ["http://localhost:3000", "http://localhost:3001"], credentials: true },
+});
+
+// 🌍 Store Connected Users
+const connectedUsers = {}; // { userId: socketId }
+
+// 🔗 Handle WebSocket Connection
+io.on("connection", (socket) => {
+  console.log(`✅ New connection: ${socket.id}`);
+
+  // User Registration (Store socket ID)
+  socket.on("register", (userId) => {
+    if (userId) {
+      connectedUsers[userId] = socket.id;
+      console.log(`👤 User Registered: ${userId} -> ${socket.id}`);
+    }
+  });
+
+  // Handle Incoming Messages
+  socket.on("chatMessage", async (message) => {
+    console.log("📩 Message received:", message);
+
+    try {
+      const newMessage = new ChatMessage(message);
+      await newMessage.save();
+
+      const receiverSocketId = connectedUsers[message.receiverId];
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("chatMessage", message);
+      } else {
+        console.log(`⚠️ Receiver ${message.receiverId} is offline. Message saved.`);
       }
-      const foodItems = await Food.find();
-      res.json(foodItems);
+    } catch (error) {
+      console.error("❌ Error saving message:", error);
+    }
+  });
+
+  // Handle Disconnection
+  socket.on("disconnect", () => {
+    const userId = Object.keys(connectedUsers).find((id) => connectedUsers[id] === socket.id);
+    if (userId) delete connectedUsers[userId];
+
+    console.log(`❌ Disconnected: ${socket.id}`);
+  });
+});
+
+app.get("/query/:queryId", async (req, res) => {
+  try {
+    const { queryId } = req.params;
+    const messages = await ChatMessage.find({ queryId }).sort({ timestamp: 1 });
+    res.json(messages);
   } catch (error) {
-      console.error("Error fetching food items:", error);
-      res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ error: "Error fetching messages" });
+  }
+});
+
+app.put("/query/resolve/:queryId", async (req, res) => {
+  try {
+    const { queryId } = req.params;
+
+    const updatedMessage = await ChatMessage.updateMany(
+      { queryId },
+      { $set: { resolved: true } }
+    );
+
+    if (updatedMessage.modifiedCount > 0) {
+      return res.status(200).json({ message: "Query marked as resolved" });
+    } else {
+      return res.status(404).json({ error: "Query not found" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Error updating query" });
   }
 });
 
 
+app.get("/api/messages/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log("Fetching messages for userId:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    // Fetch all messages where the user is either the sender or receiver
+    const messages = await ChatMessage.find({
+      $or: [{ receiverId: userId }, { senderId: userId }]
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    if (!messages.length) {
+      return res.status(404).json({ message: "No messages found" });
+    }
+
+    // Group messages by queryId for structured conversations
+    const groupedMessages = messages.reduce((acc, message) => {
+      if (!acc[message.queryId]) {
+        acc[message.queryId] = { queryId: message.queryId, resolved: message.resolved, messages: [] };
+      }
+      acc[message.queryId].messages.push(message);
+      return acc;
+    }, {});
+
+    console.log("Fetched messages:", Object.values(groupedMessages));
+    res.json(Object.values(groupedMessages));
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.put("/query/resolve/:queryId", async (req, res) => {
+  try {
+    const { queryId } = req.params;
+
+    const updatedMessage = await ChatMessage.updateMany(
+      { queryId },
+      { $set: { resolved: true } }
+    );
+
+    if (updatedMessage.modifiedCount > 0) {
+      return res.status(200).json({ message: "Query marked as resolved" });
+    } else {
+      return res.status(404).json({ error: "Query not found" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Error updating query" });
+  }
+});
+
+
+app.post("/api/generate-query-id", async (req, res) => {
+  console.log("Received request body:", req.body);  // 🔍 Debugging
+
+  const { senderId, senderName, type, content } = req.body;
+
+  try {
+    if (!senderId || !senderName || !type || !content) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    let existingQuery = await ChatMessage.findOne({ senderId, type, resolved: false });
+
+    if (existingQuery) {
+      return res.json({ queryId: existingQuery.queryId });
+    }
+
+    let queryId = `query_${Math.random().toString(36).substr(2, 9)}`;
+
+    const newMessage = new ChatMessage({
+      senderId,
+      senderName,
+      receiverId: null,
+      content,
+      type,   // Ensure `type` is correctly passed
+      queryId,
+      resolved: false,
+    });
+
+    await newMessage.save();
+    res.json({ queryId });
+
+  } catch (error) {
+    console.error("Error generating query ID:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+app.get("/api/resolved-queries/:userId", async (req, res) => {
+  try {
+      const { userId } = req.params;
+      const resolvedQueries = await ChatMessage.find({ senderId: userId, resolved: true });
+
+      if (!resolvedQueries) {
+          return res.status(404).json({ message: "No resolved queries found" });
+      }
+
+      res.json(resolvedQueries);
+  } catch (error) {
+      console.error("Error fetching resolved queries:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+// 📌 Send a Message
+app.post("/send-message", async (req, res) => {
+  const { senderId, senderName, content, type, receiverId, queryId } = req.body;
+
+  try {
+    if (!queryId) {
+      return res.status(400).json({ error: "Query ID is required" });
+    }
+
+    // Step 1: Check if the query exists
+    const existingQuery = await ChatMessage.findOne({ queryId });
+
+    if (!existingQuery) {
+      return res.status(404).json({ error: "Query not found" });
+    }
+
+    // Step 2: Create and save a new message document
+    const newMessage = new ChatMessage({
+      queryId,
+      senderId,
+      senderName,
+      receiverId,
+      content,
+      type,
+      timestamp: new Date(),
+    });
+
+    await newMessage.save();
+
+    // Step 3: Emit the message to the receiver if online
+    const receiverSocketId = connectedUsers[receiverId];
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("chatMessage", newMessage);
+    }
+
+    res.json({ success: true, message: "Message sent successfully" });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+
+
+// 📜 Fetch Canteen Staff ID
+app.get("/canteen-staff", async (req, res) => {
+  try {
+    const canteenStaff = await CanteenStaff.findOne({ role: "canteen_staff" });
+    if (!canteenStaff) {
+      return res.status(404).json({ error: "Canteen staff not found" });
+    }
+    res.json({ staffId: canteenStaff._id });
+  } catch (error) {
+    console.error("Error fetching canteen staff:", error);
+    res.status(500).json({ error: "Error fetching canteen staff" });
+  }
+});
+
+// 📜 Fetch Admin ID
+app.get("/admin", async (req, res) => {
+  try {
+    const admin = await Admin.findOne({ role: "admin" });
+    if (!admin) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+    res.json({ adminId: admin._id });
+  } catch (error) {
+    console.error("Error fetching admin:", error);
+    res.status(500).json({ error: "Error fetching admin" });
+  }
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.send('Welcome to Food For Me API');
+});
+
+app.get("/users", async (req, res) => {
+  try {
+    const users = await User.find().select("-password"); // Exclude password
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching users", error });
+  }
 });
 app.get("/api/cart/:userId", async (req, res) => {
   try {
@@ -92,21 +359,34 @@ app.get("/api/sales/payment-method", async (req, res) => {
 app.get("/api/sales/food-item", async (req, res) => {
   try {
     const salesByFood = await Order.aggregate([
-      { $match: { status: "Completed" } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: "$items.foodName",
-          totalSold: { $sum: "$items.quantity" },
-          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } } // Corrected revenue calculation
+      { $match: { status: "Completed" } }, // Only count completed orders
+      { $unwind: "$items" }, // Break array into individual items
+      { 
+        $lookup: {
+          from: "itemdetails", // Ensure this matches your MongoDB collection name
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "foodDetails"
         }
-      }
+      },
+      { $unwind: "$foodDetails" }, // Get single object instead of array
+      { 
+        $group: {
+          _id: "$foodDetails.name",
+          totalSold: { $sum: "$items.quantity" }, // Total quantity sold
+          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } } // Total revenue
+        }
+      },
+      { $sort: { revenue: -1 } } // Sort by revenue (highest first)
     ]);
+
     res.json(salesByFood);
   } catch (error) {
+    console.error("Error fetching sales data:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 app.get("/api/sales/daily", async (req, res) => {
   try {
@@ -309,6 +589,72 @@ app.delete("/api/cart/:userId/:productId", async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+app.get("/api/orders", async (req, res) => {
+  try {
+    const orders = await Order.aggregate([
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails"
+        }
+      },
+      { $unwind: "$userDetails" }, // Convert array to object
+      {
+        $lookup: {
+          from: "itemdetails", // ✅ Correct collection name
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "foodDetails"
+        }
+      },
+      {
+        $addFields: {
+          items: {
+            $map: {
+              input: "$items",
+              as: "item",
+              in: {
+                productId: "$$item.productId",
+                name: {
+                  $arrayElemAt: [
+                    "$foodDetails.name",
+                    { $indexOfArray: ["$foodDetails._id", "$$item.productId"] }
+                  ]
+                },
+                quantity: "$$item.quantity",
+                price: {
+                  $arrayElemAt: [
+                    "$foodDetails.price",
+                    { $indexOfArray: ["$foodDetails._id", "$$item.productId"] }
+                  ]
+                } // ✅ Correctly fetching price
+              }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          username: "$userDetails.username",
+          items: 1,
+          totalPrice: 1,
+          status: 1,
+          paymentMethod: 1,
+          orderDate: 1
+        }
+      }
+    ]);
+
+    res.json(orders);
+  } catch (error) {
+    console.error("❌ Error fetching orders:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 
 
 
@@ -330,13 +676,14 @@ app.post("/api/login", async (req, res) => {
       token,
       role: user.role,
       user: {
-        id: user._id,
+        id: user._id, // ⛔️ Should be _id (not id)
         username: user.username,
         email: user.email,
         role: user.role,
-        cart: user.cart || [], // ✅ Ensure cart is always an array
+        cart: user.cart || [], 
       },
     });
+    
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server error" });
@@ -352,12 +699,12 @@ app.post("/api/register-canteen", async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    let staff = await canteen_staff.findOne({ email });
+    let staff = await CanteenStaff.findOne({ email });
     if (staff) return res.status(400).json({ message: "Email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    staff = new canteen_staff({ username, email, password: hashedPassword });
+    staff = new CanteenStaff({ username, email, password: hashedPassword });
     await staff.save();
 
     res.status(201).json({ message: "Canteen staff registered successfully" });
@@ -369,18 +716,7 @@ app.post("/api/register-canteen", async (req, res) => {
 
 
 
-app.get("/api/orders", async (req, res) => {
-  try {
-    const orders = await Order.find()
-      .populate("userId", "username") // ✅ Get username
-      .populate("items.productId", "name"); // ✅ Get product details
 
-    res.json(orders);
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
 app.get("/api/orders/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -428,6 +764,15 @@ app.get("/api/orders/:userId", async (req, res) => {
     res.status(200).json(orders);
   } catch (error) {
     console.error("Error fetching user orders:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.get("/api/food", async (req, res) => {
+  try {
+    const foodItems = await Food.find(); // If using MongoDB/Mongoose
+    res.json(foodItems);
+  } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -610,35 +955,36 @@ app.get("api/history", async (req, res) => {
 
 app.get("/api/bestselling", async (req, res) => {
   try {
-    const orders = await Order.find({ status: "Completed" });
-
-    const itemSales = {};
-
-    orders.forEach((order) => {
-      if (!Array.isArray(order.items)) return; // Ensure items is an array
-
-      order.items.forEach((item) => {
-        if (!item.name) return; // Skip invalid items
-
-        if (!itemSales[item.name]) {
-          itemSales[item.name] = {
-            name: item.name,
-            category: item.category || "Uncategorized",
-            totalSold: 0,
-            revenue: 0,
-          };
+    const bestSellingItem = await Order.aggregate([
+      { $match: { status: "Completed" } }, // Only completed orders
+      { $unwind: "$items" }, // Break items array into separate docs
+      {
+        $lookup: {
+          from: "itemdetails", // Ensure correct collection name
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "foodDetails"
         }
-        itemSales[item.name].totalSold += item.quantity || 0;
-        itemSales[item.name].revenue += (item.price || 0) * (item.quantity || 0);
-      });
-    });
+      },
+      { $unwind: "$foodDetails" }, // Convert array to object
+      {
+        $group: {
+          _id: "$foodDetails._id",
+          name: { $first: "$foodDetails.name" },
+          category: { $first: "$foodDetails.category" },
+          totalSold: { $sum: "$items.quantity" },
+          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } }
+        }
+      },
+      { $sort: { totalSold: -1 } }, // Sort by highest sales
+      { $limit: 1 } // Get the top-selling item
+    ]);
 
-    // Find the best-selling item
-    const bestSellingItem = Object.values(itemSales).reduce((max, item) => 
-      item.totalSold > max.totalSold ? item : max, { totalSold: 0 }
-    );
+    if (bestSellingItem.length === 0) {
+      return res.json({ message: "No sales data found" });
+    }
 
-    res.json(bestSellingItem.totalSold > 0 ? bestSellingItem : { message: "No sales data found" });
+    res.json(bestSellingItem);
   } catch (error) {
     console.error("Error fetching best-selling item:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -646,12 +992,13 @@ app.get("/api/bestselling", async (req, res) => {
 });
 
 
+
 app.post("/api/login-canteen", async (req, res) => {
   const { email, password } = req.body;
 
   try {
     // Check if user exists
-    const user = await canteen_staff.findOne({ email });
+    const user = await CanteenStaff.findOne({ email });
 
     if (!user) {
       return res.status(400).json({ message: "User not found!" });
@@ -673,7 +1020,13 @@ app.post("/api/login-canteen", async (req, res) => {
       expiresIn: "7d",
     });
 
-    res.json({ token, role: user.role, message: "Login successful!" });
+    res.json({ 
+      token, 
+      role: user.role, 
+      message: "Login successful!", 
+      _id: user._id // ✅ Correct way to send _id
+    });
+    
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error!" });
@@ -694,6 +1047,8 @@ app.post("/admin/register", async (req, res) => {
     res.status(500).json({ error: "Error registering admin" });
   }
 });
+
+
 
 // Admin Login
 app.post("/admin/login", async (req, res) => {
@@ -757,6 +1112,37 @@ app.get('/api/sales/date', async (req, res) => {
   }
 });
 
+app.get("/api/users/:id", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+});
+
+app.get("/api/canteen_staff/:id", async (req, res) => {
+  try {
+    const staff = await CanteenStaff.findById(req.params.id).select("-password");
+    if (!staff) return res.status(404).json({ message: "Canteen staff not found" });
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+});
+
+app.get("/api/admins/:id", async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.params.id).select("-password");
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    res.json(admin);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+});
+
+
 
 
 
@@ -767,4 +1153,5 @@ app.get('/api/sales/date', async (req, res) => {
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+

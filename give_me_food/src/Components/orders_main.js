@@ -1,14 +1,20 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate,Link } from "react-router-dom";
+
+
+const statusColors = {
+  Pending: "text-yellow-500",
+  Preparing: "text-blue-500",
+  Completed: "text-green-500",
+  Cancelled: "text-red-500",
+};
 
 const OrderCard = ({ order }) => {
   return (
     <div className="bg-gray-700 bg-opacity-20 backdrop-blur-lg shadow-md rounded-lg p-4 mb-4 border border-white border-opacity-30 w-full">
-      <h2 className="text-xl font-semibold mb-2">Order ID: {order.id}</h2>
-      <p
-        className={`font-medium ${
-          order.status === "Completed" ? "text-green-600" : "text-yellow-600"
-        }`}
-      >
+      <h2 className="text-xl font-semibold mb-2">Order ID: {order._id}</h2>
+      <p className={`font-medium ${statusColors[order.status]}`}>
         Status: {order.status}
       </p>
       <div className="mt-3">
@@ -30,16 +36,16 @@ const OrderCard = ({ order }) => {
                   className="text-center border border-gray-300 odd:bg-gray-700 even:bg-gray-800 text-white"
                 >
                   <td className="border border-gray-300 px-3 py-1">
-                    {item.name}
+                    {item.productId.name}
                   </td>
                   <td className="border border-gray-300 px-3 py-1">
-                    {item.qty}
+                    {item.quantity}
                   </td>
                   <td className="border border-gray-300 px-3 py-1">
                     ₹{item.price.toFixed(2)}
                   </td>
                   <td className="border border-gray-300 px-3 py-1 font-semibold">
-                    ₹{(item.qty * item.price).toFixed(2)}
+                    ₹{(item.quantity * item.price).toFixed(2)}
                   </td>
                 </tr>
               ))}
@@ -52,52 +58,89 @@ const OrderCard = ({ order }) => {
 };
 
 const Orders = () => {
-  const orders = [
-    {
-      id: "12345",
-      status: "Completed",
-      items: [
-        { name: "Item A", qty: 2, price: 150 },
-        { name: "Item B", qty: 1, price: 200 },
-        { name: "Item C", qty: 3, price: 120 },
-        { name: "Item D", qty: 1, price: 300 },
-      ],
-    },
-    {
-      id: "67890",
-      status: "Pending",
-      items: [
-        { name: "Item C", qty: 3, price: 100 },
-        { name: "Item D", qty: 2, price: 250 },
-      ],
-    },
-    {
-      id: "11223",
-      status: "Processing",
-      items: [
-        { name: "Item E", qty: 1, price: 500 },
-        { name: "Item F", qty: 4, price: 75 },
-      ],
-    },
-  ];
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const storedUser = JSON.parse(localStorage.getItem("user"));
+
+        if (!token || !storedUser?.id) {
+          navigate("/login");
+          return;
+        }
+
+        const res = await axios.get(
+          `http://localhost:5000/api/orders/user/${storedUser.id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setOrders(res.data);
+        setError("");
+      } catch (err) {
+        console.error("Error fetching orders:", err?.response?.data || err.message);
+        setError("Failed to fetch orders. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [navigate]);
+
+  if (loading) return <p className="text-center mt-4">Loading...</p>;
+
+  
+  if (error)
+    return (
+      <div
+        className="h-screen w-full bg-cover bg-center flex flex-col items-center justify-center"
+        style={{
+          backgroundImage: "url('/assets/Your_order.png')",
+          backgroundPosition: "bottom -140px right 1px",
+        }}
+      >
+        <Link to="/" className="absolute top-4 right-4">
+          <img
+            src="/assets/logo2.png"
+            alt="Logo"
+            className="w-24 md:w-30 md:h-32 lg:w-40 lg:h-20 cursor-pointer"
+            onClick={() => navigate("/")}
+          />
+        </Link>
+        <p className="text-orange-500 text-center mt-4">No Orders</p>
+      </div>
+    );
 
   return (
     <div
       className="h-screen w-full bg-cover bg-center"
       style={{
         backgroundImage: "url('/assets/Your_order.png')",
-        backgroundPosition: "bottom -90px right 1px",
+        backgroundPosition: "bottom -140px right 1px",
       }}
     >
+      <Link to="/" className="absolute top-4 right-4">
+      <img
+        src="/assets/logo2.png"
+        alt="Logo"
+        className="w-24  md:w-30 md:h-32 lg:w-40 lg:h-20 cursor-pointer"
+        onClick={() => navigate("/")} 
+      />
+    </Link>
       <div className="pt-32 w-full h-full px-4 flex justify-left">
-        {/* Container for all orders with fixed height and scrollable content */}
         <div className="bg-white bg-opacity-20 backdrop-blur-lg shadow-lg rounded-2xl p-6 w-full max-w-5xl border border-gray-800 mb-8">
           <h1 className="text-2xl font-bold text-white mb-4">Your Orders</h1>
 
-          {/* Scrollable area for order cards */}
           <div className="max-h-96 overflow-y-auto pr-2 space-y-4">
             {orders.length > 0 ? (
-              orders.map((order) => <OrderCard key={order.id} order={order} />)
+              orders.map((order) => <OrderCard key={order._id} order={order} />)
             ) : (
               <p className="text-gray-300">No orders available</p>
             )}
@@ -109,3 +152,4 @@ const Orders = () => {
 };
 
 export default Orders;
+

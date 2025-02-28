@@ -5,7 +5,7 @@ import Button from "./ui/Button";
 import Table from "./ui/Table";
 import axios from "axios";
 import { FiMenu } from "react-icons/fi";
-
+import CanteenChatWidget from "./Canteen_widget";
 const CanteenDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
@@ -14,9 +14,16 @@ const CanteenDashboard = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [newProduct, setNewProduct] = useState({ name: "", price: "", category: "", description: "", stock: "" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [totalSales, setTotalSales] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [preparingOrders, setPreparingOrders] = useState(0);
+  const [completedOrders, setCompletedOrders] = useState(0);
+
+
 
   useEffect(() => {
     fetchProducts();
+  
     console.log("Current View:", view);
     if (view === "orders") {
       fetchOrders();
@@ -29,26 +36,6 @@ const CanteenDashboard = () => {
   
 
 
-const fetchOrders = async () => {
-  try {
-    const res = await axios.get("http://localhost:5000/api/orders");
-
-    const ordersWithDetails = (res.data || []).map(order => ({
-      ...order,
-      customerName: order.userId?.username || "Unknown", // ✅ Show username
-      items: order.items.map(item => ({
-        name: item.productId?.name || "Unknown Item", // ✅ Show product name
-        quantity: item.quantity,
-        price: item.price
-      }))
-    })).filter(order => order.status !== "Completed");
-
-    setOrders(ordersWithDetails);
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    setOrders([]);
-  }
-};
 
 
   const fetchOrderHistory = async () => {
@@ -60,6 +47,9 @@ const fetchOrders = async () => {
       setOrders([]);
     }
   };
+  
+
+
   
   
   const handleStatusChange = async (orderId, newStatus) => {
@@ -83,6 +73,34 @@ const fetchOrders = async () => {
       console.error("Error updating order status:", error.response?.data || error.message);
     }
   };
+  
+  const fetchOrders = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/orders");
+  
+      const ordersWithDetails = (res.data || []).map(order => ({
+        ...order,
+        customerName: order.username || "Unknown", // ✅ Fetch from correct field
+        items: order.items.map(item => ({
+          name: item.name || "Unknown Item", // ✅ Corrected path
+          quantity: item.quantity,
+          price: item.price
+        }))
+      }));
+  
+      // ✅ Update order counts before filtering
+      updateOrderCounts(ordersWithDetails);
+  
+      // ✅ Now filter out completed orders
+      const pendingOrdersOnly = ordersWithDetails.filter(order => order.status !== "Completed");
+  
+      setOrders(pendingOrdersOnly);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setOrders([]);
+    }
+  };
+  
   
   
   
@@ -151,31 +169,47 @@ const fetchOrders = async () => {
 
   const fetchBestSellingItems = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/orders");
+      const res = await axios.get("http://localhost:5000/api/orders"); 
+      console.log("Fetched Orders:", res.data); // Debugging
+  
       const completedOrders = res.data.filter(order => order.status === "Completed");
   
       const productSales = {};
       completedOrders.forEach(order => {
         order.items.forEach(item => {
-          const foodName = item.foodName;
+          const foodName = item.name; // ✅ Ensure name is coming
+          const price = item.price || 0; // ✅ Ensure price is valid
+          const quantity = item.quantity || 0; // ✅ Ensure quantity is valid
+  
           if (foodName) {
             if (!productSales[foodName]) {
               productSales[foodName] = { name: foodName, quantity: 0, revenue: 0 };
             }
-            productSales[foodName].quantity += item.quantity || 0;
-            productSales[foodName].revenue += (item.price || 0) * (item.quantity || 0);
+            productSales[foodName].quantity += quantity; // ✅ Proper number addition
+            productSales[foodName].revenue += price * quantity; // ✅ Calculate revenue correctly
           }
         });
       });
   
       console.log("Final Aggregated Product Sales:", productSales);
-      setBestSellingItems(productSales); // ✅ Update state here
+      const sortedProductSales = Object.values(productSales).sort((a, b) => b.quantity - a.quantity);
+      setBestSellingItems(sortedProductSales); // ✅ Update state with sorted items
   
     } catch (error) {
       console.error("Error fetching best-selling items:", error);
     }
   };
   
+  
+  const updateOrderCounts = (orders) => {
+    const pending = orders.filter(order => order.status === "Pending").length;
+    const preparing = orders.filter(order => order.status === "Preparing").length;
+    const completed = orders.filter(order => order.status === "Completed").length;
+    setPendingOrders(pending);
+    setPreparingOrders(preparing);
+    setCompletedOrders(completed);
+  };
+
   
   
 
@@ -212,6 +246,24 @@ const fetchOrders = async () => {
           <Button onClick={() => setView("orders")} variant="outline">View Orders</Button>
           <Button onClick={() => setView("products")} variant="outline">View Products</Button>
         </div>
+
+        <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <Card title="Pending Orders">
+            <p>Pending Orders</p>
+            <p className="text-xl font-bold">{pendingOrders}</p>
+          </Card>
+          <Card title="Preparing Orders">
+            <p>Preparing Orders</p>
+            <p className="text-xl font-bold">{preparingOrders}</p>
+          </Card>
+          <Card title="Completed Orders">
+            <p>Completed Orders</p>
+            <p className="text-xl font-bold">{completedOrders}</p>
+          </Card>
+        </div>
+  </div>
+        
         
 
         {view === "orders" && (
@@ -250,6 +302,8 @@ const fetchOrders = async () => {
   </Card>
 )}
 
+
+
 <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
   
 
@@ -264,14 +318,12 @@ const fetchOrders = async () => {
   <Card title="Order History">
     <Table
       headers={["Order ID", "Customer Name", "Items", "Total Price", "Date", "Status"]}
-      data={orders
-        .filter(order => order.status === "Completed") // ✅ Filter only completed orders
-        .map((order) => ({
+      data={orders.map((order) => ({
           "Order ID": order._id,
-          "Customer Name": order.customerName,
+          "Customer Name": order.username || "Unknown", // ✅ Corrected field
           "Items": order.items.map((item) => `${item.name} (x${item.quantity})`).join(", "),
           "Total Price": `₹${order.totalPrice}`,
-          "Date": new Date(order.createdAt).toLocaleDateString(),
+          "Date": new Date(order.orderDate).toLocaleDateString(), // ✅ Corrected Date Field
           "Status": order.status
         }))}
     />
@@ -370,9 +422,15 @@ const fetchOrders = async () => {
               }))} />
             </div>
           </Card>
+
+          
         )}
       </div>
+      <div className="fixed bottom-4 right-4 z-50">
+        <CanteenChatWidget />
+      </div>
     </div>
+    
   );
 };
 

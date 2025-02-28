@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Navbar from "./Components/Navbar";
 import Foodlay from "./Components/foodlay";
-import CartPage from "./Components/Cartpage";
+import CartPage from "./Components/cartpage_main";
 import { CartProvider } from "./context/cartContext";
-import ChatWidget from "./Components/Chatwidget";
+import SupportPopup from "./Components/chatwidget_new";
 import LoginForm from "./Components/LoginForm";
 import RegisterForm from "./Components/RegisterForm";
 import LoadingScreen from "./Components/LoadingScreen";
@@ -15,14 +15,22 @@ import HomePage from "./Components/homepage";
 import AdminRegister from "./Components/Admin/Amin_register"; // ✅ Import Admin Register
 import AdminLogin from "./Components/Admin/Admin_login"; // ✅ Import Admin Login
 import OrderStatus from "./Components/Statuspage";
-import Orders from "./Components/Orders";
+import Orders from "./Components/orders_main";
 import AdminDashboard from "./Components/Admin/Admin_dashboard"; // ✅ Import Admin Dashboard
+import ChatWidget from "./Components/chatwidget_new";
 function App() {
   const [loading, setLoading] = useState(true);
-  const showNavbar = !window.location.pathname.includes("canteen");
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     setTimeout(() => setLoading(false), 3000);
+
+    // Retrieve user from localStorage
+    const userData = localStorage.getItem("user");
+    console.log("Loaded User Data:", userData); 
+    if (userData) {
+      setCurrentUser(JSON.parse(userData));
+    }
   }, []);
 
   return (
@@ -32,11 +40,8 @@ function App() {
           <LoadingScreen />
         ) : (
           <>
-           
             <Routes>
               {/* User Side */}
-           
-              
               <Route path="/" element={<HomePage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/login" element={<LoginForm />} />
@@ -44,21 +49,19 @@ function App() {
               <Route path="/order-status/:orderId" element={<OrderStatus />} />
               <Route path="/orders" element={<Orders />} />
 
-
-
-              {/* ✅ Canteen Side */}
+              {/* Canteen Side */}
               <Route path="/canteen-login" element={<CanteenLogin />} />
               <Route path="/canteen-register" element={<CanteenRegister />} />
-              <Route path="/canteen-dashboard" element={<CanteenDashboard/>} />
+              <Route path="/canteen-dashboard" element={<CanteenDashboard />} />
 
-              {/* Admin side*/}
-
+              {/* Admin Side */}
               <Route path="/admin-login" element={<AdminLogin />} />
               <Route path="/admin-register" element={<AdminRegister />} />
               <Route path="/admin-dashboard" element={<AdminDashboard />} />
-              
             </Routes>
-            <ChatWidget />
+
+            {/* ✅ Pass userId and role to SupportPopup */}
+            <ChatWidget/>
           </>
         )}
       </Router>

@@ -4,12 +4,13 @@ import { Draggable } from "gsap/Draggable";
 import { CartContext } from "../context/cartContext";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import img2 from "../images/Footer.jpg";
 
 gsap.registerPlugin(Draggable);
 
 const CardSlider = ({ searchQuery = "" }) => {
   const { addToCart } = useContext(CartContext);
-  const [foodItems, setFoodItems] = useState([]);
+
   const [bestSellingItems, setBestSellingItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -18,6 +19,9 @@ const CardSlider = ({ searchQuery = "" }) => {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const cardsRef = useRef([]);
+  const [foodItems, setFoodItems] = useState([]);
+  
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const spacing = 250;
 
@@ -25,6 +29,11 @@ const CardSlider = ({ searchQuery = "" }) => {
   const fetchFoodItems = async () => {
     try {
       const response = await fetch("http://localhost:5000/api/food");
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+  
       const data = await response.json();
       setFoodItems(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -32,38 +41,45 @@ const CardSlider = ({ searchQuery = "" }) => {
       setFoodItems([]);
     }
   };
+  
 
   // Fetch Best Selling Items
+  
   const fetchBestSellingItems = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/orders");
+      const res = await axios.get("http://localhost:5000/api/orders"); 
+      console.log("Fetched Orders:", res.data); // Debugging
+  
       const completedOrders = res.data.filter(order => order.status === "Completed");
+  
       const productSales = {};
-
       completedOrders.forEach(order => {
-        if (!order.items) return;
         order.items.forEach(item => {
-          const foodName = item.foodName;
+          const foodName = item.name; // ✅ Ensure name is coming
+          const price = item.price || 0; // ✅ Ensure price is valid
+          const quantity = item.quantity || 0; // ✅ Ensure quantity is valid
+  
           if (foodName) {
             if (!productSales[foodName]) {
               productSales[foodName] = { name: foodName, quantity: 0, revenue: 0 };
             }
-            productSales[foodName].quantity += item.quantity || 0;
-            productSales[foodName].revenue += (item.price || 0) * (item.quantity || 0);
+            productSales[foodName].quantity += quantity; // ✅ Proper number addition
+            productSales[foodName].revenue += price * quantity; // ✅ Calculate revenue correctly
           }
         });
       });
-
+  
       const sortedProductSales = Object.values(productSales)
-        .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 2);
-
+        .sort((a, b) => b.quantity - a.quantity) // Sort by quantity
+        .slice(0, 2); // Take top 2 best-sellers
+  
       setBestSellingItems(sortedProductSales);
     } catch (error) {
       console.error("Error fetching best-selling items:", error);
     }
   };
-
+  
+  
   useEffect(() => {
     fetchFoodItems();
     fetchBestSellingItems();
@@ -135,7 +151,7 @@ const CardSlider = ({ searchQuery = "" }) => {
   return (
     <div
       className="flex flex-col h-screen items-center justify-center overflow-hidden relative"
-      style={{ backgroundImage: "url(/assets/bg4.png)", backgroundSize: "cover" }}
+      style={{ backgroundImage: `url(${img2})`, backgroundSize: "cover" }}
     >
       {toastMessage && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg text-lg font-semibold transition-all duration-500">
@@ -161,10 +177,12 @@ const CardSlider = ({ searchQuery = "" }) => {
               className="slider-card w-60 h-80 flex flex-col items-center justify-center bg-white/30 backdrop-blur-lg shadow-lg border border-white rounded-xl p-4 transition-transform transform hover:scale-105 hover:shadow-2xl relative group"
               onClick={() => scrollToCard(index)}
             >
-              {bestSellingItems.some(bestItem => bestItem.name === item.name) && (
-                <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">Best Seller</span>
-              )}
+              {bestSellingItems.length > 0 &&
+ bestSellingItems.some(bestItem => bestItem.name === item.name) && (
+  <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">Best Seller</span>
+)}
               <img src={item.image} alt={item.title} className="w-40 h-40 object-cover rounded-lg mb-4" />
+              <h3 className="text-lg font-semibold text-black">Rs.{item.price}</h3>
               <h3 className="text-lg font-semibold text-black">{item.name}</h3>
               {item.stock <= 1 ? (
                 <span className="mt-2 text-red-600 font-semibold">Out of Stock</span>

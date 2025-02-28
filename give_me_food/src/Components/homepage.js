@@ -4,6 +4,7 @@ import CardSlider from "./cardslider";
 import img from "../images/tray.jpg";
 import { CartContext } from "../context/cartContext";
 import { FiSearch } from "react-icons/fi"; // Importing search icon
+import img2 from "../images/Footer.jpg";
 
 const HomePage = () => {
   const { cart,setCart } = useContext(CartContext);
@@ -149,6 +150,7 @@ const HomePage = () => {
       <div className="p-4 sm:p-8 md:p-12">
         <CardSlider searchQuery={searchQuery} />
       </div>
+
     </div>
   );
 };

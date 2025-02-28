@@ -1,10 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import LoadingScreen from "./LoadingScreen"; // Import LoadingScreen
-import { useContext } from "react";
 import { CartContext } from "../context/cartContext";
-
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -27,19 +25,20 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); // Show loading screen
-    
-     
-    
+
     try {
       const res = await axios.post("http://localhost:5000/api/login", { email, password });
 
       // Store token and user data in localStorage
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("userId", res.data.user._id);
       const userRole = res.data.user?.role || "user"; // Ensure role is set
-    localStorage.setItem("role", userRole);
-    window.dispatchEvent(new Event("storage")); // Force reactivity
-    
+      localStorage.setItem("role", userRole);
+      window.dispatchEvent(new Event("storage")); // Force reactivity
+
+      // ✅ Update cart in context after login
+      setCart(res.data.user.cart || []);
 
       // Show success message
       setMessage("Login successful! Redirecting...");
@@ -102,8 +101,14 @@ export default function LoginForm() {
                   required
                 />
               </div>
-              <button type="submit" className="w-full bg-orange-700 hover:bg-orange-800 text-white py-2 rounded-lg">
-                Login
+              <button
+                type="submit"
+                className={`w-full bg-orange-700 hover:bg-orange-800 text-white py-2 rounded-lg ${
+                  loading ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+                disabled={loading}
+              >
+                {loading ? "Logging in..." : "Login"}
               </button>
             </form>
           </div>

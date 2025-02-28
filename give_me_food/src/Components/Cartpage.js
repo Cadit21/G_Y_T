@@ -70,7 +70,6 @@ function CartPage() {
   };
 
   const totalAmount = cart.reduce((acc, item) => acc + (item.productId?.price || 0) * item.quantity, 0);
-
   const placeOrder = async () => {
     try {
       const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -88,20 +87,20 @@ function CartPage() {
         throw new Error("Your cart is empty.");
       }
   
-      console.log('Cart Items:', cart); // Debugging log
+      console.log("✅ Cart Items Before Order:", cart);
   
-      // Prepare the order data
       const orderData = {
         userId: storedUser.id,
         items: cart.map(item => ({
-          productId: item.productId._id,  // Ensure only product ID is sent
+          productId: item.productId._id,
           quantity: item.quantity
         })),
         paymentMethod: "UPI",
       };
   
-      console.log("Order Data:", JSON.stringify(orderData, null, 2)); 
+      console.log("📦 Sending Order Data:", JSON.stringify(orderData, null, 2));
   
+      // ✅ Send order request to backend
       const response = await fetch("http://localhost:5000/api/orders", {
         method: "POST",
         headers: {
@@ -111,32 +110,66 @@ function CartPage() {
         body: JSON.stringify(orderData)
       });
   
+      console.log("📨 Order Response Status:", response.status);
+  
       if (!response.ok) {
-        const errorMessage = await response.text();
-        throw new Error(`Failed to place order: ${errorMessage}`);
+        const errorText = await response.text();
+        throw new Error(`Failed to place order: ${errorText}`);
       }
   
       const data = await response.json();
-      console.log("Order response:", data);
+      console.log("✅ Order Placed Successfully:", data);
   
       if (!data.order._id) {
         throw new Error("Invalid order response: Order ID is missing.");
       }
   
-      // ✅ Navigate to the order status page with the correct order ID
+      // ✅ Remove ordered items from cart in the backend
+      console.log("🗑 Removing ordered items from cart...");
+  
+      let failedRemovals = [];
+  
+      for (const item of cart) {
+        console.log(`🔹 Attempting to delete item: ${item.productId._id}`);
+  
+        try {
+          const deleteResponse = await fetch(`http://localhost:5000/api/cart/${storedUser.id}/${item.productId._id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+  
+          console.log(`📨 Delete Response Status for ${item.productId._id}:`, deleteResponse.status);
+  
+          if (!deleteResponse.ok) {
+            const errorText = await deleteResponse.text();
+            console.error(`❌ Failed to remove item ${item.productId._id} from cart:`, errorText);
+            failedRemovals.push(item.productId._id);
+          } else {
+            console.log(`✅ Item ${item.productId._id} removed from cart successfully`);
+          }
+        } catch (err) {
+          console.error(`❌ Error deleting ${item.productId._id}:`, err.message);
+          failedRemovals.push(item.productId._id);
+        }
+      }
+  
+      if (failedRemovals.length > 0) {
+        console.warn("⚠️ Some items were not removed from the cart:", failedRemovals);
+      }
+  
+      // ✅ Update cart in the frontend
+      const updatedCart = cart.filter(item => failedRemovals.includes(item.productId._id));
+      setCart(updatedCart);
+      console.log("🛒 Updated Cart After Order:", updatedCart);
+  
+      alert("🎉 Order placed successfully!");
       navigate(`/order-status/${data.order._id}`);
   
-      // Clear cart after successful order
-      localStorage.removeItem("cart");
-      alert("Order placed successfully!");
-  
     } catch (error) {
-      console.error("Error placing order:", error.message);
+      console.error("❌ Error placing order:", error.message);
       alert(error.message);
     }
   };
-  
-  
   
   
 

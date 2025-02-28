@@ -9,7 +9,54 @@ const statusColors = {
   Cancelled: "text-red-500",
 };
 
-const OrdersPage = () => {
+const OrderCard = ({ order }) => {
+  return (
+    <div className="bg-gray-700 bg-opacity-20 backdrop-blur-lg shadow-md rounded-lg p-4 mb-4 border border-white border-opacity-30 w-full">
+      <h2 className="text-xl font-semibold mb-2">Order ID: {order._id}</h2>
+      <p className={`font-medium ${statusColors[order.status]}`}>
+        Status: {order.status}
+      </p>
+      <div className="mt-3">
+        <h3 className="text-lg font-medium">Items:</h3>
+        <div className="max-h-40 overflow-y-auto mt-2">
+          <table className="w-full border-collapse border border-gray-300">
+            <thead className="sticky top-0">
+              <tr className="bg-gray-100 bg-opacity-30">
+                <th className="border border-gray-300 px-3 py-1">Item Name</th>
+                <th className="border border-gray-300 px-3 py-1">Quantity</th>
+                <th className="border border-gray-300 px-3 py-1">Price</th>
+                <th className="border border-gray-300 px-3 py-1">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item, index) => (
+                <tr
+                  key={index}
+                  className="text-center border border-gray-300 odd:bg-gray-700 even:bg-gray-800 text-white"
+                >
+                  <td className="border border-gray-300 px-3 py-1">
+                    {item.productId.name}
+                  </td>
+                  <td className="border border-gray-300 px-3 py-1">
+                    {item.quantity}
+                  </td>
+                  <td className="border border-gray-300 px-3 py-1">
+                    ₹{item.price.toFixed(2)}
+                  </td>
+                  <td className="border border-gray-300 px-3 py-1 font-semibold">
+                    ₹{(item.quantity * item.price).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -17,33 +64,31 @@ const OrdersPage = () => {
 
   useEffect(() => {
     const fetchOrders = async () => {
-        try {
-          const token = localStorage.getItem("token");
-          const storedUser = JSON.parse(localStorage.getItem("user"));
-      
-          console.log("Token:", token); // ✅ Check if token exists
-          console.log("User ID:", storedUser?.id); // ✅ Check if user ID exists
-      
-          if (!token || !storedUser?.id) {
-            navigate("/login");
-            return;
-          }
-      
-          const res = await axios.get(`http://localhost:5000/api/orders/user/${storedUser.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-      
-          console.log("Orders fetched:", res.data); // ✅ See what comes back
-          setOrders(res.data);
-          setError("");
-        } catch (err) {
-          console.error("Error fetching orders:", err?.response?.data || err.message);
-          setError("Failed to fetch orders. Please try again.");
-        } finally {
-          setLoading(false);
+      try {
+        const token = localStorage.getItem("token");
+        const storedUser = JSON.parse(localStorage.getItem("user"));
+
+        if (!token || !storedUser?.id) {
+          navigate("/login");
+          return;
         }
-      };
-      
+
+        const res = await axios.get(
+          `http://localhost:5000/api/orders/user/${storedUser.id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setOrders(res.data);
+        setError("");
+      } catch (err) {
+        console.error("Error fetching orders:", err?.response?.data || err.message);
+        setError("Failed to fetch orders. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
     fetchOrders();
   }, [navigate]);
@@ -53,33 +98,28 @@ const OrdersPage = () => {
   if (error) return <p className="text-red-500 text-center mt-4">{error}</p>;
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6 text-center">Your Orders</h1>
-      {orders.length === 0 ? (
-        <p className="text-center text-gray-600">No orders found.</p>
-      ) : (
-        <div className="space-y-4">
-          {orders.map((order) => (
-            <div key={order._id} className="border p-4 rounded-lg shadow-md">
-              <p><strong>Order ID:</strong> {order._id}</p>
-              <p className={`font-medium ${statusColors[order.status]}`}>
-                <strong>Status:</strong> {order.status}
-              </p>
-              <p><strong>Total Price:</strong> ₹{order.totalPrice}</p>
-              <h3 className="font-semibold mt-2">Items:</h3>
-              <ul className="list-disc pl-5">
-                {order.items.map((item) => (
-                  <li key={item.productId._id}>
-                    {item.productId.name} - {item.quantity} x ₹{item.price}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+    <div
+      className="h-screen w-full bg-cover bg-center"
+      style={{
+        backgroundImage: "url('/assets/Your_order.png')",
+        backgroundPosition: "bottom -90px right 1px",
+      }}
+    >
+      <div className="pt-32 w-full h-full px-4 flex justify-left">
+        <div className="bg-white bg-opacity-20 backdrop-blur-lg shadow-lg rounded-2xl p-6 w-full max-w-5xl border border-gray-800 mb-8">
+          <h1 className="text-2xl font-bold text-white mb-4">Your Orders</h1>
+
+          <div className="max-h-96 overflow-y-auto pr-2 space-y-4">
+            {orders.length > 0 ? (
+              orders.map((order) => <OrderCard key={order._id} order={order} />)
+            ) : (
+              <p className="text-gray-300">No orders available</p>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
 
-export default OrdersPage;
+export default Orders;

@@ -28,6 +28,8 @@ const AdminDashboard = () => {
   const [salesByFood, setSalesByFood] = useState([]);
   const [salesByDate, setSalesByDate] = useState([]);
   const [totalSales, setTotalSales] = useState(0);
+  const [users, setUsers] = useState([]);
+
   
   
   const [bestSellingItems, setBestSellingItems] = useState([]);
@@ -42,16 +44,19 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchProducts();
-    console.log("Current View:", view);
     if (view === "orders") {
       fetchOrders();
     } else if (view === "Order History") {
       fetchOrderHistory();
-     } else if (view === "Sales") fetchSalesData();
-    else if (view === "Best Selling Items") {
-      fetchBestSellingItems(); // Fetch best-selling items when this view is selected
+    } else if (view === "Sales") {
+      fetchSalesData();
+    } else if (view === "Best Selling Items") {
+      fetchBestSellingItems();
+    } else if (view === "Users Details") {
+      fetchUsers(); // Fetch users when "Users" view is selected
     }
   }, [view]);
+  
   
   
   const fetchSalesData = async () => {
@@ -88,24 +93,35 @@ const AdminDashboard = () => {
   };
   
 
-const fetchOrders = async () => {
+  const fetchOrders = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/orders");
+  
+      const ordersWithDetails = (res.data || []).map(order => ({
+        ...order,
+        customerName: order.username || "Unknown", // ✅ Fetch from correct field
+        items: order.items.map(item => ({
+          name: item.name || "Unknown Item", // ✅ Corrected path
+          quantity: item.quantity,
+          price: item.price
+        }))
+      })).filter(order => order.status !== "Completed"); // ✅ Filter out completed orders
+  
+      setOrders(ordersWithDetails);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setOrders([]);
+    }
+  };
+  
+
+const fetchUsers = async () => {
   try {
-    const res = await axios.get("http://localhost:5000/api/orders");
-
-    const ordersWithDetails = (res.data || []).map(order => ({
-      ...order,
-      customerName: order.userId?.username || "Unknown", // ✅ Show username
-      items: order.items.map(item => ({
-        name: item.productId?.name || "Unknown Item", // ✅ Show product name
-        quantity: item.quantity,
-        price: item.price
-      }))
-    })).filter(order => order.status !== "Completed");
-
-    setOrders(ordersWithDetails);
+    const res = await axios.get("http://localhost:5000/users");
+    setUsers(res.data || []);
   } catch (error) {
-    console.error("Error fetching orders:", error);
-    setOrders([]);
+    console.error("Error fetching users:", error);
+    setUsers([]);
   }
 };
 
@@ -210,19 +226,24 @@ const fetchOrders = async () => {
 
   const fetchBestSellingItems = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/orders");
+      const res = await axios.get("http://localhost:5000/api/orders"); 
+      console.log("Fetched Orders:", res.data); // Debugging
+  
       const completedOrders = res.data.filter(order => order.status === "Completed");
   
       const productSales = {};
       completedOrders.forEach(order => {
         order.items.forEach(item => {
-          const foodName = item.foodName;
+          const foodName = item.name; // ✅ Ensure name is coming
+          const price = item.price || 0; // ✅ Ensure price is valid
+          const quantity = item.quantity || 0; // ✅ Ensure quantity is valid
+  
           if (foodName) {
             if (!productSales[foodName]) {
               productSales[foodName] = { name: foodName, quantity: 0, revenue: 0 };
             }
-            productSales[foodName].quantity += item.quantity || 0;
-            productSales[foodName].revenue += (item.price || 0) * (item.quantity || 0);
+            productSales[foodName].quantity += quantity; // ✅ Proper number addition
+            productSales[foodName].revenue += price * quantity; // ✅ Calculate revenue correctly
           }
         });
       });
@@ -235,6 +256,7 @@ const fetchOrders = async () => {
       console.error("Error fetching best-selling items:", error);
     }
   };
+  
   
   
 
@@ -262,7 +284,7 @@ const fetchOrders = async () => {
     ></div>
   )}
       <div className={`fixed md:relative bg-white z-10 transition-transform transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:w-64 w-3/4 h-full shadow-lg`}>  
-        <Sidebar menuItems={["Order History","Best Selling Items","Sales"]} onMenuSelect={(view) => {  setView(view); setSidebarOpen(false); }} />
+        <Sidebar menuItems={["Order History","Best Selling Items","Sales","Users Details"]} onMenuSelect={(view) => {  setView(view); setSidebarOpen(false); }} />
       </div>
       <div className="flex-1 p-4 md:p-8 overflow-x-auto w-full">
         
@@ -318,19 +340,18 @@ const fetchOrders = async () => {
   <Card title="Order History">
     <Table
       headers={["Order ID", "Customer Name", "Items", "Total Price", "Date", "Status"]}
-      data={orders
-        .filter(order => order.status === "Completed") // ✅ Filter only completed orders
-        .map((order) => ({
+      data={orders.map((order) => ({
           "Order ID": order._id,
-          "Customer Name": order.customerName,
+          "Customer Name": order.username || "Unknown", // ✅ Corrected field
           "Items": order.items.map((item) => `${item.name} (x${item.quantity})`).join(", "),
           "Total Price": `₹${order.totalPrice}`,
-          "Date": new Date(order.createdAt).toLocaleDateString(),
+          "Date": new Date(order.orderDate).toLocaleDateString(), // ✅ Corrected Date Field
           "Status": order.status
         }))}
     />
   </Card>
 )}
+
 
 {view === "Sales" && (
   <Card title="Total Sales">
@@ -385,6 +406,23 @@ const fetchOrders = async () => {
     ) : (
       <p className="text-red-500">⚠️ No food sales data available.</p>
     )}
+  </Card>
+)}
+
+{view === "Users Details" && (
+  <Card title="Users">
+    <div className="overflow-x-auto">
+      <Table
+        headers={["User ID", "Username", "Email", "Role", "Created At"]}
+        data={users.map(user => ({
+          "User ID": user._id,
+          "Username": user.username,
+          "Email": user.email,
+          "Role": user.role || "Customer",
+          "Created At": new Date(user.createdAt).toLocaleDateString(),
+        }))}
+      />
+    </div>
   </Card>
 )}
 

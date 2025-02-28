@@ -16,6 +16,9 @@ const CanteenLogin = () => {
       if (res.data.role === "canteen_staff") {
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("role", res.data.role);
+        localStorage.setItem("canteenStaffId", res.data._id); // ✅ Ensure correct key
+        localStorage.setItem("user", JSON.stringify(res.data)); 
+    
         navigate("/canteen-dashboard");
       } else {
         setError("Access denied! Not a canteen owner.");
